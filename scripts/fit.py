@@ -88,7 +88,7 @@ parser.add_argument("--pitch_upper", default=15 * math.pi / 180, type=float)
 parser.add_argument("--tilt_lower", default=-45 * math.pi / 180, type=float)
 parser.add_argument("--tilt_upper", default=45 * math.pi / 180, type=float)
 
-parser.add_argument("--reset_epochs", default=4000000, type=int)
+parser.add_argument("--reset_epochs", default=600, type=int)
 parser.add_argument("--optimizer", default="mala_star", type=str, choices=["mala_star", "dexgraspnet"])
 parser.add_argument("--initialization", default="convex_hull", type=str, choices=["random", "convex_hull"])
 
