@@ -1,0 +1,68 @@
+{
+  "full": {
+    "robot0_ffproximal": {
+      "n_points": 4
+    },
+    "robot0_mfproximal": {
+      "n_points": 4
+    },
+    "robot0_rfproximal": {
+      "n_points": 4
+    },
+    "robot0_lfproximal": {
+      "n_points": 4
+    },
+    "robot0_thproximal": {
+      "n_points": 4
+    },
+    "robot0_ffdistal": {
+      "n_points": 8
+    },
+    "robot0_mfdistal": {
+      "n_points": 8
+    },
+    "robot0_rfdistal": {
+      "n_points": 8
+    },
+    "robot0_lfdistal": {
+      "n_points": 8
+    },
+    "robot0_thdistal": {
+      "n_points": 8
+    },
+    "robot0_ffmiddle": {
+      "n_points": 4
+    },
+    "robot0_mfmiddle": {
+      "n_points": 4
+    },
+    "robot0_lfmiddle": {
+      "n_points": 4
+    },
+    "robot0_thmiddle": {
+      "n_points": 4
+    },
+    "robot0_rfmiddle": {
+      "n_points": 4
+    }
+  },
+  "pinch": {
+    "robot0_ffdistal": {
+      "n_points": 16
+    },
+    "robot0_thdistal": {
+      "n_points": 16
+    }
+  },
+  "precision": {
+    "robot0_ffdistal": {
+      "n_points": 8
+    },
+    "robot0_thdistal": {
+      "n_points": 8
+    },
+    "robot0_mfdistal": {
+      "n_points": 8
+    }
+  }
+}

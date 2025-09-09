@@ -1,0 +1,80 @@
+<?xml version="1.0"?>
+<robot name="franka_panda">
+  <joint name="panda_finger_joint1" type="prismatic">
+    <origin xyz="0. 0. 0.0584" rpy="0. 0. 1.5707964"/>
+    <parent link="panda_hand"/>
+    <child link="panda_leftfinger"/>
+    <axis xyz="1. 0. 0."/>
+    <limit lower="0." upper="0.04" effort="25." velocity="0.04"/>
+  </joint>
+  <joint name="panda_finger_joint2" type="prismatic">
+    <origin xyz="0. 0. 0.0584" rpy="0. 0. -1.5707964"/>
+    <parent link="panda_hand"/>
+    <child link="panda_rightfinger"/>
+    <axis xyz="1. 0. 0."/>
+    <limit lower="0." upper="0.04" effort="25." velocity="0.04"/>
+  </joint>
+  <joint name="root_joint" type="fixed">
+    <origin xyz="0. 0. -0.075" rpy="0. 0. 0."/>
+    <parent link="panda"/>
+    <child link="panda_hand"/>
+  </joint>
+  <link name="panda"/>
+  <link name="panda_hand">
+    <inertial>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0."/>
+      <mass value="0.81"/>
+      <inertia ixx="0." ixy="0." ixz="0." iyy="0." iyz="0." izz="0."/>
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0."/>
+      <geometry>
+        <mesh filename="meshes/panda_hand_visuals_mesh_0.obj" scale="1. 1. 1."/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0."/>
+      <geometry>
+        <mesh filename="meshes/panda_hand_hull.obj" scale="1. 1. 1."/>
+      </geometry>
+    </collision>
+  </link>
+  <link name="panda_leftfinger">
+    <inertial>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0."/>
+      <mass value="0.1"/>
+      <inertia ixx="0." ixy="0." ixz="0." iyy="0." iyz="0." izz="0."/>
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="0. 0. -1.5707964"/>
+      <geometry>
+        <mesh filename="meshes/panda_finger.obj" scale="1. 1. 1."/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="0. 0. -1.5707964"/>
+      <geometry>
+        <mesh filename="meshes/panda_finger.obj" scale="1. 1. 1."/>
+      </geometry>
+    </collision>
+  </link>
+  <link name="panda_rightfinger">
+    <inertial>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0."/>
+      <mass value="0.1"/>
+      <inertia ixx="0." ixy="0." ixz="0." iyy="0." iyz="0." izz="0."/>
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="0. 0. -1.5707963"/>
+      <geometry>
+        <mesh filename="meshes/panda_finger.obj" scale="1. 1. 1."/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="0. 0. -1.5707963"/>
+      <geometry>
+        <mesh filename="meshes/panda_finger.obj" scale="1. 1. 1."/>
+      </geometry>
+    </collision>
+  </link>
+</robot>

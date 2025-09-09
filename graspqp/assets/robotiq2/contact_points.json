@@ -1,0 +1,4 @@
+{
+    "left_inner_finger_pad":[["../../robotiq2/meshes/fingerpad_contact_right_mesh.obj", 16]],
+    "right_inner_finger_pad":[["../../robotiq2/meshes/fingerpad_contact_mesh.obj", 16]]
+}

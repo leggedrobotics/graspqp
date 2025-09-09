@@ -1,0 +1,67 @@
+{
+    "full": {
+        "index_L1": {
+            "n_points": 4
+        },
+        "index_L2": {
+            "n_points": 8
+        },
+        "middle_L1": {
+            "n_points": 4
+        },
+        "middle_L2": {
+            "n_points": 8
+        },
+        "ring_L1": {
+            "n_points": 4
+        },
+        "ring_L2": {
+            "n_points": 8
+        },
+        "pinky_L1": {
+            "n_points": 4
+        },
+        "pinky_L2": {
+            "n_points": 8
+        },
+        "thumb_L2": {
+            "n_points": 16
+        }
+    },
+    "pinch": {
+        "index_L2": {
+            "n_points": 16
+        },
+        "thumb_L2": {
+            "n_points": 16
+        }
+    },
+    "precision": {
+        "index_L2": {
+            "n_points": 8
+        },
+        "middle_L2": {
+            "n_points": 8
+        },
+        "thumb_L2": {
+            "n_points": 16
+        }
+    },
+    "tips": {
+        "index_L2": {
+            "n_points": 8
+        },
+        "middle_L2": {
+            "n_points": 8
+        },
+        "ring_L2": {
+            "n_points": 8
+        },
+        "pinky_L2": {
+            "n_points": 8
+        },
+        "thumb_L2": {
+            "n_points": 16
+        }
+    }
+ }

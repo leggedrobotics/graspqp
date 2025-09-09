@@ -1,0 +1,266 @@
+<?xml version="1.0"?>
+<robot name="robotiq_3finger_flat">
+  <joint name="root_joint" type="fixed">
+    <origin xyz="0. 0. -0.08" rpy="1.57 0.  -1.57"/>
+    <parent link="RobotIQ"/>
+    <child link="RIQ_palm"/>
+  </joint>
+  <joint name="RIQ_link_0_RIQ_link_1_joint_b" type="revolute">
+    <origin xyz="-0.00397 0.021877 0. " rpy="1.5707964 1.5707964 0. "/>
+    <parent link="RIQ_link_0_joint_b"/>
+    <child link="RIQ_link_1_joint_b"/>
+    <axis xyz="1. 0. 0."/>
+    <limit lower="-0.0940732" upper="1.1276571" effort="0.773" velocity="0.2617994"/>
+  </joint>
+  <joint name="RIQ_link_0_RIQ_link_1_joint_c" type="revolute">
+    <origin xyz="-0.00397 0.021877 0. " rpy="1.5707964 1.5707964 0. "/>
+    <parent link="RIQ_link_0_joint_c"/>
+    <child link="RIQ_link_1_joint_c"/>
+    <axis xyz="1. 0. 0."/>
+    <limit lower="-0.0940732" upper="1.1276571" effort="0.773" velocity="0.2617994"/>
+  </joint>
+  <joint name="RIQ_link_1_RIQ_link_2_joint_a" type="revolute">
+    <origin xyz="0. -0.0282374 -0.0496867" rpy="-0.5167919 0. 0. "/>
+    <parent link="RIQ_link_1_joint_a"/>
+    <child link="RIQ_link_2_joint_a"/>
+    <axis xyz="1. 0. 0."/>
+    <limit lower="0." upper="1.5707963" effort="0.387" velocity="0.2617994"/>
+  </joint>
+  <joint name="RIQ_link_1_RIQ_link_2_joint_b" type="revolute">
+    <origin xyz="0. -0.0282374 -0.0496867" rpy="-0.5167919 0. 0. "/>
+    <parent link="RIQ_link_1_joint_b"/>
+    <child link="RIQ_link_2_joint_b"/>
+    <axis xyz="1. 0. 0."/>
+    <limit lower="0." upper="1.5707963" effort="0.387" velocity="0.2617994"/>
+  </joint>
+  <joint name="RIQ_link_1_RIQ_link_2_joint_c" type="revolute">
+    <origin xyz="0. -0.0282374 -0.0496867" rpy="-0.5167919 0. 0. "/>
+    <parent link="RIQ_link_1_joint_c"/>
+    <child link="RIQ_link_2_joint_c"/>
+    <axis xyz="1. 0. 0."/>
+    <limit lower="0." upper="1.5707963" effort="0.387" velocity="0.2617994"/>
+  </joint>
+  <joint name="RIQ_link_2_RIQ_link_3_joint_a" type="revolute">
+    <origin xyz="0. 0. -0.03894" rpy="0. 0. 0."/>
+    <parent link="RIQ_link_2_joint_a"/>
+    <child link="RIQ_link_3_joint_a"/>
+    <axis xyz="1. 0. 0."/>
+    <limit lower="-0.9531242" upper="0.7572983" effort="2.5" velocity="0.2617994"/>
+  </joint>
+  <joint name="RIQ_link_2_RIQ_link_3_joint_b" type="revolute">
+    <origin xyz="0. 0. -0.03894" rpy="0. 0. 0."/>
+    <parent link="RIQ_link_2_joint_b"/>
+    <child link="RIQ_link_3_joint_b"/>
+    <axis xyz="1. 0. 0."/>
+    <limit lower="-0.9531242" upper="0.7572983" effort="2.5" velocity="0.2617994"/>
+  </joint>
+  <joint name="RIQ_link_2_RIQ_link_3_joint_c" type="revolute">
+    <origin xyz="0. 0. -0.03894" rpy="0. 0. 0."/>
+    <parent link="RIQ_link_2_joint_c"/>
+    <child link="RIQ_link_3_joint_c"/>
+    <axis xyz="1. 0. 0."/>
+    <limit lower="-0.9531242" upper="0.7572983" effort="2.5" velocity="0.2617994"/>
+  </joint>
+  <joint name="RIQ_palm_RIQ_link_0_joint" type="revolute">
+    <origin xyz="-0.040507 0.019844 -0.036513" rpy="0. 0. 0."/>
+    <parent link="RIQ_palm"/>
+    <child link="RIQ_link_0_joint_c"/>
+    <axis xyz="1. 0. 0."/>
+    <limit lower="-0.2967059" upper="0.2967059" effort="2.5" velocity="0.2617994"/>
+  </joint>
+  <joint name="RIQ_palm_RIQ_link_0_joint_b" type="revolute">
+    <origin xyz="-0.040507 0.019844 0.036513" rpy="0. 0. 0."/>
+    <parent link="RIQ_palm"/>
+    <child link="RIQ_link_0_joint_b"/>
+    <axis xyz="1. 0. 0."/>
+    <limit lower="-0.2967059" upper="0.2967059" effort="2.5" velocity="0.2617994"/>
+  </joint>
+  <joint name="RIQ_palm_RIQ_link_1_joint_a" type="revolute">
+    <origin xyz="0.044475 0.041358 0. " rpy="1.5707964 -1.5707964 0. "/>
+    <parent link="RIQ_palm"/>
+    <child link="RIQ_link_1_joint_a"/>
+    <axis xyz="1. 0. 0."/>
+    <limit lower="-0.0940732" upper="1.1276571" effort="0.773" velocity="0.2617994"/>
+  </joint>
+
+
+
+  <link name="RIQ_link_0_joint_b">
+    <visual>
+      <origin xyz="-0.00397 0.021877 0. " rpy="-3.1415925 -0. 1.5707963"/>
+      <geometry>
+        <mesh filename="meshes/RIQ_link_0_joint_b_visuals_mesh_0.obj" scale="1 1 1"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="-0.00397 0.021877 0. " rpy="-3.1415925 -0. 1.5707963"/>
+      <geometry>
+        <mesh filename="meshes/hull_RIQ_link_0_joint_b_mesh_0.obj" scale="1 1 1"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <link name="RIQ_link_0_joint_c">
+    <visual>
+      <origin xyz="-0.00397 0.021877 0. " rpy="-3.1415925 -0. 1.5707963"/>
+      <geometry>
+        <mesh filename="meshes/RIQ_link_0_joint_b_visuals_mesh_0.obj" scale="1 1 1"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="-0.00397 0.021877 0. " rpy="-3.1415925 -0. 1.5707963"/>
+      <geometry>
+        <mesh filename="meshes/hull_RIQ_link_0_joint_b_mesh_0.obj" scale="1 1 1"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <link name="RIQ_link_1_joint_a">
+    <visual>
+      <origin xyz="0. -0.0282374 -0.0496867" rpy="-1.5707964 1.0540044 -1.5707964"/>
+      <geometry>
+        <mesh filename="meshes/RIQ_link_1_joint_a_visuals_mesh_0.obj" scale="1 1 1"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. -0.0282374 -0.0496867" rpy="-1.5707964 1.0540044 -1.5707964"/>
+      <geometry>
+        <mesh filename="meshes/hull_RIQ_link_1_joint_a_mesh_0.obj" scale="1 1 1"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <link name="RIQ_link_1_joint_b">
+    <visual>
+      <origin xyz="0. -0.0282374 -0.0496867" rpy="-1.5707964 1.0540044 -1.5707964"/>
+      <geometry>
+        <mesh filename="meshes/RIQ_link_1_joint_a_visuals_mesh_0.obj" scale="1 1 1"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. -0.0282374 -0.0496867" rpy="-1.5707964 1.0540044 -1.5707964"/>
+      <geometry>
+        <mesh filename="meshes/hull_RIQ_link_1_joint_a_mesh_0.obj" scale="1 1 1"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <link name="RIQ_link_1_joint_c">
+    <visual>
+      <origin xyz="0. -0.0282374 -0.0496867" rpy="-1.5707964 1.0540044 -1.5707964"/>
+      <geometry>
+        <mesh filename="meshes/RIQ_link_1_joint_a_visuals_mesh_0.obj" scale="1 1 1"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. -0.0282374 -0.0496867" rpy="-1.5707964 1.0540044 -1.5707964"/>
+      <geometry>
+        <mesh filename="meshes/hull_RIQ_link_1_joint_a_mesh_0.obj" scale="1 1 1"/>
+      </geometry>
+    </collision>
+  </link>
+  <link name="RIQ_link_2_joint_a">
+    <visual>
+      <origin xyz="0.0075 0. -0.03894" rpy="0. 1.5707963 0. "/>
+      <geometry>
+        <mesh filename="meshes/RIQ_link_2_joint_a_visuals_mesh_0.obj" scale="1 1 1"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0.0075 0. -0.03894" rpy="0. 1.5707963 0. "/>
+      <geometry>
+        <mesh filename="meshes/hull_RIQ_link_2_joint_a_mesh_0.obj" scale="1 1 1"/>
+      </geometry>
+    </collision>
+  </link>
+  <link name="RIQ_link_2_joint_b">
+    <visual>
+      <origin xyz="0.0075 0. -0.03894" rpy="0. 1.5707963 0. "/>
+      <geometry>
+        <mesh filename="meshes/RIQ_link_2_joint_a_visuals_mesh_0.obj" scale="1 1 1"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0.0075 0. -0.03894" rpy="0. 1.5707963 0. "/>
+      <geometry>
+        <mesh filename="meshes/hull_RIQ_link_2_joint_a_mesh_0.obj" scale="1 1 1"/>
+      </geometry>
+    </collision>
+  </link>
+  <link name="RIQ_link_2_joint_c">
+    <visual>
+      <origin xyz="0.0075 0. -0.03894" rpy="0. 1.5707963 0. "/>
+      <geometry>
+        <mesh filename="meshes/RIQ_link_2_joint_a_visuals_mesh_0.obj" scale="1 1 1"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0.0075 0. -0.03894" rpy="0. 1.5707963 0. "/>
+      <geometry>
+        <mesh filename="meshes/hull_RIQ_link_2_joint_a_mesh_0.obj" scale="1 1 1"/>
+      </geometry>
+    </collision>
+  </link>
+  <link name="RIQ_link_3_joint_a">
+    <visual>
+      <origin xyz="0. 0. 0." rpy="1.5707964 1.0540044 1.5707964"/>
+      <geometry>
+        <mesh filename="meshes/RIQ_link_3_joint_a_visuals_mesh_0.obj" scale="1 1 1"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="1.5707964 1.0540044 1.5707964"/>
+      <geometry>
+        <mesh filename="meshes/hull_RIQ_link_3_joint_a_mesh_0.obj" scale="1 1 1"/>
+      </geometry>
+    </collision>
+  </link>
+  <link name="RIQ_link_3_joint_b">
+    <visual>
+      <origin xyz="0. 0. 0." rpy="1.5707964 1.0540044 1.5707964"/>
+      <geometry>
+        <mesh filename="meshes/RIQ_link_3_joint_a_visuals_mesh_0.obj" scale="1 1 1"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="1.5707964 1.0540044 1.5707964"/>
+      <geometry>
+        <mesh filename="meshes/hull_RIQ_link_3_joint_a_mesh_0.obj" scale="1 1 1"/>
+      </geometry>
+    </collision>
+  </link>
+  <link name="RIQ_link_3_joint_c">
+    <visual>
+      <origin xyz="0. 0. 0." rpy="1.5707964 1.0540044 1.5707964"/>
+      <geometry>
+        <mesh filename="meshes/RIQ_link_3_joint_a_visuals_mesh_0.obj" scale="1 1 1"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="1.5707964 1.0540044 1.5707964"/>
+      <geometry>
+        <mesh filename="meshes/hull_RIQ_link_3_joint_a_mesh_0.obj" scale="1 1 1"/>
+      </geometry>
+    </collision>
+  </link>
+  <link name="RIQ_palm">
+    <inertial>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0."/>
+      <mass value="0.02"/>
+      <inertia ixx="0." ixy="0." ixz="0." iyy="0." iyz="0." izz="0."/>
+    </inertial>
+    <visual>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0."/>
+      <geometry>
+        <mesh filename="meshes/RIQ_palm_visuals_mesh_0.obj" scale="1 1 1"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0. 0. 0." rpy="0. 0. 0."/>
+      <geometry>
+        <mesh filename="meshes/hull_RIQ_palm_mesh_0.obj" scale="1 1 1"/>
+      </geometry>
+    </collision>
+  </link>
+  <link name="RobotIQ"/>
+</robot>

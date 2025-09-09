@@ -1,0 +1,59 @@
+{
+  "full": {
+    "index_link_1": {
+      "n_points": 8
+    },
+    "ring_link_1": {
+      "n_points": 8
+    },
+    "middle_link_1": {
+      "n_points": 8
+    },
+    "index_link_2": {
+      "n_points": 8
+    },
+    "ring_link_2": {
+      "n_points": 8
+    },
+    "middle_link_2": {
+      "n_points": 8
+    },
+    "thumb_link_2": {
+      "n_points": 8
+    },
+    "index_link_3": {
+      "n_points": 8
+    },
+    "middle_link_3": {
+      "n_points": 8
+    },
+    "ring_link_3": {
+      "n_points": 8
+    },
+    "thumb_link_3": {
+      "n_points": 8
+    },
+    "palm_link": {
+      "n_points": 4
+    }
+  },
+
+  "precision": {
+    "index_link_3": {
+      "n_points": 8
+    },
+    "middle_link_3": {
+      "n_points": 8
+    },
+    "thumb_link_3": {
+      "n_points": 8
+    }
+  },"pinch": {
+    "index_link_3": {
+      "n_points": 8
+    },
+    "thumb_link_3": {
+      "n_points": 8
+    }
+  }
+}

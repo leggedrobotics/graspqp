@@ -1,0 +1,15 @@
+{
+    "RIQ_link_1_joint_a":[["../../robotiq3/contacts/contact_RIQ_link_1_joint_a_mesh_0.obj", 4]],
+"RIQ_link_2_joint_a":[["../../robotiq3/contacts/contact_RIQ_link_2_joint_a_mesh_0.obj", 4]],
+"RIQ_link_3_joint_a":[["../../robotiq3/contacts/contact_RIQ_link_3_joint_a_mesh_0.obj", 8]],
+
+"RIQ_link_1_joint_b":[["../../robotiq3/contacts/contact_RIQ_link_1_joint_a_mesh_0.obj", 4]],
+"RIQ_link_2_joint_b":[["../../robotiq3/contacts/contact_RIQ_link_2_joint_a_mesh_0.obj", 4]],
+"RIQ_link_3_joint_b":[["../../robotiq3/contacts/contact_RIQ_link_3_joint_a_mesh_0.obj", 8]],
+
+"RIQ_link_1_joint_c":[["../../robotiq3/contacts/contact_RIQ_link_1_joint_a_mesh_0.obj", 4]],
+"RIQ_link_2_joint_c":[["../../robotiq3/contacts/contact_RIQ_link_2_joint_a_mesh_0.obj", 4]],
+"RIQ_link_3_joint_c":[["../../robotiq3/contacts/contact_RIQ_link_3_joint_a_mesh_0.obj", 8]]
+
+
+}

@@ -1,0 +1,17 @@
+{
+
+    "index_link_1":[["../../allegro/meshes/l1_contact.obj", 8]],
+    "ring_link_1":[["../../allegro/meshes/l1_contact.obj", 8]],
+    "middle_link_1":[["../../allegro/meshes/l1_contact.obj", 8]],
+    
+    "index_link_2":[["../../allegro/meshes/l2_contact.obj", 8]],
+    "ring_link_2":[["../../allegro/meshes/l2_contact.obj", 8]],
+    "middle_link_2":[["../../allegro/meshes/l2_contact.obj", 8]],
+    "thumb_link_2":[["../../allegro/meshes/l2_contact.obj", 8]],
+
+    "index_link_3":[["../../allegro/meshes/fingertip_contact.obj", 8]],
+    "middle_link_3":[["../../allegro/meshes/fingertip_contact.obj", 8]],
+    "ring_link_3":[["../../allegro/meshes/fingertip_contact.obj", 8]],
+    "thumb_link_3":[["../../allegro/meshes/fingertip_contact.obj", 8]],
+    "palm_link":[["../../allegro/meshes/palm_contact.obj",4]]
+}

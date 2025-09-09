@@ -1,0 +1,21 @@
+{
+    "robot0_ffproximal":[["../contact_mesh/index_finger_proximal_visuals_mesh_0.obj", 4]],
+    "robot0_mfproximal":[["../contact_mesh/index_finger_proximal_visuals_mesh_0.obj", 4]],
+    "robot0_rfproximal":[["../contact_mesh/index_finger_proximal_visuals_mesh_0.obj", 4]],
+    "robot0_lfproximal":[["../contact_mesh/index_finger_proximal_visuals_mesh_0.obj", 4]],
+    "robot0_thproximal":[["../contact_mesh/thumb_proximal_visuals_mesh_0.obj", 4]],
+
+    "robot0_ffdistal":[["../contact_mesh/index_finger_distal_visuals_mesh_0.obj", 8]],
+    "robot0_mfdistal":[["../contact_mesh/index_finger_distal_visuals_mesh_0.obj", 8]],
+    "robot0_rfdistal":[["../contact_mesh/index_finger_distal_visuals_mesh_0.obj", 8]],
+    "robot0_lfdistal":[["../contact_mesh/index_finger_distal_visuals_mesh_0.obj", 8]],
+    "robot0_thdistal":[["../contact_mesh/thumb_distal_visuals_mesh_0.obj", 8]],
+
+    "robot0_ffmiddle":[["../contact_mesh/index_finger_middle_visuals_mesh_0.obj", 4]],
+    "robot0_mfmiddle":[["../contact_mesh/index_finger_middle_visuals_mesh_0.obj", 4]],
+    "robot0_lfmiddle":[["../contact_mesh/index_finger_middle_visuals_mesh_0.obj", 4]],
+    "robot0_thmiddle":[["../contact_mesh/thumb_middle_visuals_mesh_0.obj", 4]],
+    "robot0_rfmiddle":[["../contact_mesh/index_finger_middle_visuals_mesh_0.obj", 4]]
+
+
+}

@@ -1,0 +1,56 @@
+{
+  "full": {
+
+  "RIQ_link_1_joint_a": {
+    "n_points": 4
+  },
+  "RIQ_link_2_joint_a": {
+    "n_points": 4
+  },
+  "RIQ_link_3_joint_a": {
+    "n_points": 8  
+  },
+
+  "RIQ_link_1_joint_b": {
+    "n_points": 4
+  },
+  "RIQ_link_2_joint_b": {
+    "n_points": 4
+  },
+  "RIQ_link_3_joint_b": {
+    "n_points": 8  
+  },
+
+  "RIQ_link_1_joint_c": {
+    "n_points": 4
+  },
+  "RIQ_link_2_joint_c": {
+    "n_points": 4
+  },
+  "RIQ_link_3_joint_c": {
+    "n_points": 8
+}
+},
+"pinch":{
+  "RIQ_link_3_joint_a": {
+    "n_points": 8  
+
+  },
+  "RIQ_link_3_joint_b": {
+    "n_points": 8  
+  }
+
+},
+"precision":{
+  "RIQ_link_3_joint_a": {
+    "n_points": 8  
+
+  },
+  "RIQ_link_3_joint_b": {
+    "n_points": 8  
+  }, "RIQ_link_3_joint_c": {
+    "n_points": 8  
+  }
+
+}
+} 
