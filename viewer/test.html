@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Babylon.js GLTF Viewer (CDN) — JSON Catalog</title>
+  <meta name="description" content="Static Babylon.js viewer that loads .glb/.gltf models from a JSON catalog and/or local files. CDN-only." />
+  <style>
+    :root{ --bg:#f8f9fa; --fg:#555; --muted:#6c757d; --accent:#0d6efd; --card:#ffffff; --border:#dee2e6; }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;font:15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial; color:var(--fg); background:var(--bg)}
+    header{position:sticky;top:0;z-index:10;background:rgba(255,255,255,.9);backdrop-filter:blur(8px);border-bottom:1px solid var(--border)}
+    .wrap{max-width:1600px;margin:0 auto;padding:0 16px}
+    .nav{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 0;}
+    h1{font-size:18px;margin:0}
+    #renderCanvas{width:100%;height:72vh;display:block;border-radius:12px}
+    .panel{margin-top:12px;display:grid;gap:12px}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:6px}
+    .card .head{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--border)}
+    .card .body{padding:12px}
+    .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+    select,button,input[type="range"],input[type="text"],label.btn{padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:#ffffff;color:var(--fg)}
+    button.btn{cursor:pointer}
+    button.btn:hover{background:#e9ecef}
+    .pill{display:inline-flex;align-items:center;gap:6px;background:#f8f9fa;border:1px solid var(--border);padding:4px 8px;border-radius:999px;font-size:12px;color:var(--muted)}
+    small.muted{color:var(--muted)}
+    code{background:#f8f9fa;border:1px solid var(--border);border-radius:8px;padding:2px 6px}
+    footer{border-top:1px solid var(--border);color:var(--muted);text-align:center;padding:12px 0;background:var(--bg);margin-top:16px}
+
+    /* --- Caption styles --- */
+    .caption-card{
+      background:#fff;border:1px solid var(--border);border-radius:12px;
+      padding:14px 16px;line-height:1.55;box-shadow:0 1px 2px rgba(16,24,40,.04);
+      max-width:100%;
+    }
+    .caption-card h3{margin:0 0 8px 0;font-size:1.05rem}
+    .caption-card .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace}
+    .legend{list-style:none;padding:0;margin:10px 0 8px 0;display:grid;gap:8px}
+    .diamond{
+      display:inline-block;width:12px;height:12px;transform:rotate(45deg);
+      margin-right:8px;vertical-align:-1px;border-radius:2px
+    }
+    .diamond.red{background:#e53935}
+    .diamond.blue{background:#1e88e5}
+    .note{color:#475467;margin-top:6px}
+  </style>
+  <!-- Babylon.js (CDN) -->
+  <script src="https://cdn.babylonjs.com/babylon.js"></script>
+  <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+  <script src="https://cdn.babylonjs.com/materialsLibrary/babylonjs.materials.min.js"></script>
+  <!-- Draco decoder for compressed GLB files -->
+  <script src="https://cdn.babylonjs.com/draco_wasm_wrapper_gltf.js"></script>
+</head>
+<body>
+  <header>
+    <div class="wrap nav">
+      GraspQP
+    </div>
+  </header>
+
+  <main class="wrap panel">
+    <section class="card">
+      <div class="head">
+
+
+
+        <div class="row" style="gap:12px; align-items:flex-start">
+           <label>  <strong>Grasp Configurations</strong>: Hand Type
+            <select id="handTypeSelect">
+              <option disabled selected>— Select hand type —</option>
+            </select>
+          </label>
+          <label>Grasp Type
+            <select id="graspTypeSelect">
+              <option disabled selected>— Select grasp type —</option>
+            </select>
+          </label>
+          <label>Object Type
+            <select id="objectTypeSelect">
+              <option disabled selected>— Select object type —</option>
+            </select>
+          </label>
+            <div style="flex-grow:1"></div>
+          <button class="btn" id="btnClear" style="float:right; border-color:#f8aabb">Clear</button>
+        </div>
+
+        <!-- <div class="caption">
+             <strong>Grasp Configurations</strong>: <span class="mono" id="capHand">{handtype}</span>
+            on <span class="mono" id="capObject">{object}</span> 
+            </div> -->
+      </div>
+      
+          
+         
+      <div class="body">
+
+          <p>
+            This view shows multiple grasp configurations for the selected hand and object.
+            The colored diamonds encode <strong>force-closure quality</strong> and
+            <strong>wrench-space coverage</strong>:
+          </p>
+          <ul class="legend">
+            <li>
+              <span class="diamond red" aria-hidden="true"></span>
+              <strong>Force coverage (red):</strong> how well the grasp withstands external forces
+              along the <em>x</em>, <em>y</em>, and <em>z</em> axes.
+            </li>
+            <li>
+              <span class="diamond blue" aria-hidden="true"></span>
+              <strong>Torque coverage (blue):</strong> how well the grasp resists rotations (moments)
+              about the <em>x</em>, <em>y</em>, and <em>z</em> axes.
+            </li>
+          </ul>
+          <p class="note">
+            Lower coverage indicates <em>wrench-space degeneracy</em>, i.e., directions where the grasp
+            cannot reliably balance forces or torques.
+          </p>
+        <canvas id="renderCanvas"></canvas>
+        </section>
+
+      </div>
+
+      <!-- <div class="head">
+        Controls
+        <div class="row">
+          <label class="btn" title="Toggle ground"><input type="checkbox" id="toggleGround" checked /> Grid</label>
+          <label class="btn" title="Wireframe materials"><input type="checkbox" id="toggleWire" /> Wireframe</label>
+          <label class="btn" title="Auto orbit camera"><input type="checkbox" id="toggleOrbit" checked /> Auto Orbit</label>
+          <label>Light <input id="lightIntensity" type="range" min="0" max="3" step="0.1" value="1.2"/></label>
+        </div>
+      </div> -->
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+        Controls
+          <label class="btn" title="Toggle ground"><input type="checkbox" id="toggleGround" checked /> Grid</label>
+          <label class="btn" title="Wireframe materials"><input type="checkbox" id="toggleWire" /> Wireframe</label>
+          <label class="btn" title="Auto orbit camera"><input type="checkbox" id="toggleOrbit" checked /> Auto Orbit</label>
+          <!-- <label>Light <input id="lightIntensity" type="range" min="0" max="3" step="0.1" value="1.2"/></label> -->
+    </div>
+  </footer>
+
+  <script>
+    const $ = (s) => document.querySelector(s);
+    const canvas = $('#renderCanvas');
+
+    // Babylon setup
+    const engine = new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true });
+    let scene, camera, light, ground, gridMat, importedContainer = null, plane;
+
+    // Configure Draco decoder for compressed GLB files
+    BABYLON.DracoCompression.Configuration = {
+      decoder: {
+        wasmUrl: "https://www.gstatic.com/draco/versioned/decoders/1.5.6/draco_wasm_wrapper_gltf.js",
+        wasmBinaryUrl: "https://www.gstatic.com/draco/versioned/decoders/1.5.6/draco_decoder_gltf.wasm",
+        fallbackUrl: "https://www.gstatic.com/draco/versioned/decoders/1.5.6/draco_decoder_gltf.js"
+      }
+    };
+    console.log('Draco decoder configured with Google CDN');
+
+    function createScene(){
+      scene = new BABYLON.Scene(engine);
+      scene.clearColor = new BABYLON.Color4(0.95, 0.95, 0.95, 1); // Light gray background
+
+      // Camera
+      camera = new BABYLON.ArcRotateCamera('cam', -Math.PI/2, Math.PI/2.5, 6, new BABYLON.Vector3(0,1,0), scene);
+      camera.attachControl(canvas, true);
+      camera.wheelPrecision = 50;
+      camera.minZ = 0.02;
+
+      // Light
+      light = new BABYLON.HemisphericLight('hemi', new BABYLON.Vector3(0,1,0), scene);
+      light.intensity = 1.2;
+
+      // Environment + grid
+      const env = scene.createDefaultEnvironment({ createGround:true, groundSize:50, skyboxSize:50, groundOpacity:1});
+      ground = env?.ground ?? null;
+      if (ground) {
+        gridMat = new BABYLON.GridMaterial('grid', scene);
+        gridMat.gridRatio = 0.05; gridMat.opacity = 0.98;
+        gridMat.mainColor = new BABYLON.Color3(0.8,0.8,0.8);
+        gridMat.lineColor = new BABYLON.Color3(0.7,0.7,0.7);
+        ground.material = gridMat;
+        ground.position.y = -0.22;
+      }
+
+      // Additional flat plane (light blue) slightly below grid
+      plane = BABYLON.MeshBuilder.CreateGround("groundPlane", { width: 50, height: 50 }, scene);
+      const groundMat = new BABYLON.StandardMaterial("groundMat", scene);
+      groundMat.diffuseColor = BABYLON.Color3.FromHexString("#5585b5");
+      groundMat.specularColor = BABYLON.Color3.Black();
+      plane.material = groundMat;
+      plane.position.y = -0.3;
+
+      return scene;
+    }
+
+    createScene();
+
+    // UI controls
+    // $('#lightIntensity').addEventListener('input', e => light.intensity = parseFloat(e.target.value)); 
+    $('#toggleGround').addEventListener('change', e => { if (ground) ground.isVisible = e.target.checked; });
+    $('#toggleWire').addEventListener('change', e => { scene.meshes.forEach(m => { if (m.material) m.material.wireframe = e.target.checked; }); });
+    $('#toggleOrbit').addEventListener('change', e => { orbitEnabled = e.target.checked; });
+
+    // Files registry (supports .gltf/.glb and their external deps if selected together)
+    const handTypeSelect = $('#handTypeSelect');
+    const graspTypeSelect = $('#graspTypeSelect');
+    const objectTypeSelect = $('#objectTypeSelect');
+
+    // Map of filename -> File (local) and catalog data
+    const filesMap = new Map();
+    let catalogData = {}; // {handType: {objectId: url}}
+
+    function registerFiles(fileList){
+      let added = 0;
+      for (const f of fileList){
+        const key = f.name.toLowerCase();
+        filesMap.set(key, f);
+        if (BABYLON.FilesInput) {
+          BABYLON.FilesInput.FilesToLoad = BABYLON.FilesInput.FilesToLoad || {};
+          BABYLON.FilesInput.FilesToLoad[key] = f;
+          BABYLON.FilesInput.FilesToLoad[f.name] = f; // original case
+        }
+        if (/\.(gltf|glb)$/i.test(f.name)) added++;
+      }
+      if (added>0) refreshDropdowns();
+    }
+
+    function refreshDropdowns(){
+      const savedHandType = handTypeSelect.value;
+      const savedGraspType = graspTypeSelect.value;
+      const savedObjectType = objectTypeSelect.value;
+
+      handTypeSelect.innerHTML = '<option disabled>— Select hand type —</option>';
+      graspTypeSelect.innerHTML = '<option disabled>— Select grasp type —</option>';
+      objectTypeSelect.innerHTML = '<option disabled>— Select object type —</option>';
+
+      const handTypes = Object.keys(catalogData).sort();
+      for (const handType of handTypes){
+        const opt = document.createElement('option');
+        opt.value = handType; 
+        opt.textContent = handType;
+        handTypeSelect.appendChild(opt);
+      }
+
+      if (handTypes.length > 0) {
+        handTypeSelect.value = handTypes.includes(savedHandType) ? savedHandType : handTypes[0];
+        updateGraspTypes();
+
+        if (!savedObjectType || !objectTypeSelect.querySelector(`option[value="${savedObjectType}"]`)) {
+          const firstObjectOption = objectTypeSelect.querySelector('option:not([disabled])');
+          if (firstObjectOption) {
+            objectTypeSelect.value = firstObjectOption.value;
+            setTimeout(() => {
+              console.log('Auto-loading first model...');
+              loadSelected();
+            }, 100);
+          }
+        } else {
+          objectTypeSelect.value = savedObjectType;
+        }
+      }
+      updateCaption();
+    }
+
+    function updateGraspTypes(){
+      const handType = handTypeSelect.value;
+      const savedGraspType = graspTypeSelect.value;
+
+      graspTypeSelect.innerHTML = '<option disabled>— Select grasp type —</option>';
+      if (!handType || !catalogData[handType]) { updateCaption(); return; }
+
+      // Extract grasp types from the catalog data structure
+      // Assuming the catalog has structure like: handType -> graspType -> objectId
+      const graspTypes = Object.keys(catalogData[handType]).sort();
+      for (const graspType of graspTypes){
+        const opt = document.createElement('option');
+        opt.value = graspType;
+        opt.textContent = graspType;
+        graspTypeSelect.appendChild(opt);
+      }
+
+      if (graspTypes.length > 0) {
+        graspTypeSelect.value = graspTypes.includes(savedGraspType) ? savedGraspType : graspTypes[0];
+        updateObjectTypes();
+      }
+      updateCaption();
+    }
+
+    function updateObjectTypes(){
+      const handType = handTypeSelect.value;
+      const graspType = graspTypeSelect.value;
+      const savedObjectType = objectTypeSelect.value;
+
+      objectTypeSelect.innerHTML = '<option disabled>— Select object type —</option>';
+      if (!handType || !graspType || !catalogData[handType] || !catalogData[handType][graspType]) { 
+        updateCaption(); 
+        return; 
+      }
+
+      const objectTypes = Object.keys(catalogData[handType][graspType]);
+      for (const objType of objectTypes){
+        const opt = document.createElement('option');
+        opt.value = objType;
+        opt.textContent = objType;
+        objectTypeSelect.appendChild(opt);
+      }
+      objectTypeSelect.value = objectTypes.includes(savedObjectType) ? savedObjectType : (objectTypes[0] || "");
+      updateCaption();
+    }
+
+    // --- Caption updater ---
+    function updateCaption(){
+      const hand = handTypeSelect.value || '—';
+      const grasp = graspTypeSelect.value || '—';
+      const obj  = objectTypeSelect.value || '—';
+      const capHand = document.getElementById('capHand');
+      const capObject = document.getElementById('capObject');
+      if (capHand) capHand.textContent = hand;
+      if (capObject) capObject.textContent = obj;
+    }
+
+    // Event listeners
+    handTypeSelect.addEventListener('change', () => {
+      updateGraspTypes();
+      setTimeout(() => {
+        if (handTypeSelect.value && graspTypeSelect.value && objectTypeSelect.value) {
+          console.log('Auto-loading due to hand type change...');
+          loadSelected();
+        }
+      }, 50);
+      updateCaption();
+    });
+
+    graspTypeSelect.addEventListener('change', () => {
+      updateObjectTypes();
+      setTimeout(() => {
+        if (handTypeSelect.value && graspTypeSelect.value && objectTypeSelect.value) {
+          console.log('Auto-loading due to grasp type change...');
+          loadSelected();
+        }
+      }, 50);
+      updateCaption();
+    });
+
+    objectTypeSelect.addEventListener('change', () => {
+      if (handTypeSelect.value && graspTypeSelect.value && objectTypeSelect.value) {
+        console.log('Auto-loading due to object type change...');
+        loadSelected();
+      }
+      updateCaption();
+    });
+
+    // Drag & drop support
+    document.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+    document.addEventListener('drop', e => { e.preventDefault(); if (e.dataTransfer?.files?.length) registerFiles(e.dataTransfer.files); });
+
+    async function clearImported(){
+      if (importedContainer){
+        importedContainer.removeAllFromScene();
+        importedContainer.dispose();
+        importedContainer = null;
+      }
+    }
+
+    function fitCameraToMeshes(meshes){
+      if (!meshes || meshes.length===0) return;
+      const min = new BABYLON.Vector3(Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY);
+      const max = new BABYLON.Vector3(Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY);
+      meshes.forEach(m => {
+        if (!m.getBoundingInfo) return;
+        const bi = m.getBoundingInfo();
+        const bmin = bi.boundingBox.minimumWorld;
+        const bmax = bi.boundingBox.maximumWorld;
+        min.minimizeInPlace(bmin);
+        max.maximizeInPlace(bmax);
+      });
+      const center = min.add(max).scale(0.5);
+      const radius = max.subtract(min).length() * 0.6 + 0.5;
+      camera.setTarget(center);
+      camera.radius = Math.max(radius, 1.5);
+    }
+
+    async function loadSelected(){
+      const handType = handTypeSelect.value;
+      const graspType = graspTypeSelect.value;
+      const objectType = objectTypeSelect.value;
+
+      if (!handType || !graspType || !objectType) { 
+        alert('Please select hand type, grasp type, and object type.'); 
+        return; 
+      }
+
+      const handData = catalogData[handType];
+      if (!handData) { alert('Selected hand type not found in catalog.'); return; }
+
+      const graspData = handData[graspType];
+      if (!graspData) { alert('Selected grasp type not found in catalog.'); return; }
+
+      const matchingObjects = Object.keys(graspData).filter(objId => objId == objectType);
+      if (matchingObjects.length === 0) {
+        alert(`No objects found for ${objectType} with ${handType} - ${graspType}.`);
+        return;
+      }
+
+      const selectedObjectId = matchingObjects[0];
+      const url = graspData[selectedObjectId];
+
+      await clearImported();
+      try{
+        console.log(`Loading Draco-compressed GLB: ${url}`);
+        const container = await BABYLON.SceneLoader.LoadAssetContainerAsync('', url, scene);
+        container.addAllToScene(); 
+        importedContainer = container; 
+        fitCameraToMeshes(container.meshes);
+        updateCaption();
+        console.log(`Successfully loaded Draco GLB: ${handType} + ${objectType} (${selectedObjectId})`);
+      }catch(err){ 
+        console.error('Failed to load Draco GLB', url, err); 
+        if (err.message && err.message.includes('draco')) {
+          alert('Failed to decode Draco-compressed model. Please ensure the GLB file is properly encoded with Draco compression.');
+        } else {
+          alert('Failed to load model: '+url+' — if viewing via file://, run a simple HTTP server to allow fetch.'); 
+        }
+      }
+    }
+
+    $('#btnClear').addEventListener('click', clearImported);
+
+    // Camera orbit animation variables
+    let orbitSpeed = 0.001; // Radians per frame
+    let orbitEnabled = true;
+
+    // Render loop with camera animation
+    engine.runRenderLoop(() => { 
+      if (scene) {
+        if (orbitEnabled && camera && camera.alpha !== undefined) {
+          camera.alpha += orbitSpeed;
+        }
+        scene.render(); 
+      }
+    });
+    window.addEventListener('resize', () => engine.resize());
+
+    // ---- JSON Catalog loading ----
+    function normalizeCatalog(json){
+      console.log('Normalizing catalog JSON', json);
+      return json;
+
+      // (Legacy schema handling retained below if needed)
+      for (const key in json) {
+        if (key.toLowerCase().includes('error')) {
+          throw new Error(`Catalog JSON contains error key: ${json[key]}`);
+        }
+      }
+      if (json && typeof json === 'object' && !Array.isArray(json.entries)) {
+        const keys = Object.keys(json);
+        if (keys.length > 0 && typeof json[keys[0]] === 'object') {
+          return json;
+        }
+      }
+      if (json && Array.isArray(json.entries)){
+        const result = {};
+        for (const entry of json.entries) {
+          if (!entry || !entry.url || !entry.label) continue;
+          const match = entry.label.match(/(.+)\s*—\s*(.+)/);
+          if (match) {
+            const [, objectType, handType] = match;
+            if (!result[handType]) result[handType] = {};
+            result[handType][objectType] = entry.url;
+          }
+        }
+        return result;
+      }
+      if (json && json.root && json.tail && Array.isArray(json.object_types) && Array.isArray(json.hand_types)){
+        const result = {};
+        for (const h of json.hand_types){
+          result[h] = {};
+          for (const o of json.object_types){
+            result[h][o] = `${json.root}/${o}/${h}/${json.tail}`;
+          }
+        }
+        return result;
+      }
+      throw new Error('Unsupported JSON schema');
+    }
+
+    async function loadJsonFromUrl(url){
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    }
+
+    function loadJsonFromFile(file){
+      return new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onerror = () => reject(new Error('Failed to read file'));
+        fr.onload = () => { try { resolve(JSON.parse(fr.result)); } catch(e){ reject(e);} };
+        fr.readAsText(file);
+      });
+    }
+
+    async function applyCatalog(json){
+      try{
+        const data = normalizeCatalog(json);
+        catalogData = data;
+        refreshDropdowns();
+        console.log('Loaded catalog with hand types:', Object.keys(catalogData));
+      }catch(e){
+        console.error(e);
+        alert('Invalid catalog JSON: ' + e.message);
+      }
+    }
+
+    // Auto-try models.json on load if present (when served via HTTP)
+    (async () => {
+      const saved = localStorage.getItem('babylonCatalogUrl');
+      const tryUrl = saved || 'models.json';
+      try{
+        const data = await loadJsonFromUrl(tryUrl);
+        console.log('Loaded catalog from URL:', tryUrl);
+        await applyCatalog(data);
+        if (!saved) localStorage.setItem('babylonCatalogUrl', tryUrl);
+      }catch{ /* ignore */ }
+    })();
+  </script>
+</body>
+</html>

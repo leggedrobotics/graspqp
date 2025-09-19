@@ -1,0 +1,57 @@
+x-default-graspqp_isaaclab-environment: &default-graspqp_isaaclab-environment
+  - OMNI_KIT_ALLOW_ROOT=1
+
+x-default-graspqp_isaaclab-deploy: &default-graspqp_isaaclab-deploy
+  resources:
+    reservations:
+      devices:
+        - driver: nvidia
+          count: all
+          capabilities: [ gpu ]
+
+services:
+  graspqp_isaaclab:
+    env_file: .env.base
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile
+      args:
+        - ISAACLAB_BASE_IMAGE_ARG=${ISAACLAB_BASE_IMAGE}
+        - DOCKER_ISAACLAB_EXTENSION_TEMPLATE_PATH_ARG=${DOCKER_ISAACLAB_EXTENSION_TEMPLATE_PATH}
+    image: graspqp_isaaclab
+    container_name: graspqp_isaaclab
+    volumes:
+      - type: bind
+        source: ../
+        target: ${DOCKER_ISAACLAB_EXTENSION_TEMPLATE_PATH}
+      - type: bind
+        # source: /cluster/scratch/zrene/
+        source: /media/zrene/data/GraspGen/
+        target: /data
+    network_mode: host
+    environment: *default-graspqp_isaaclab-environment
+    deploy: *default-graspqp_isaaclab-deploy
+    # This is the entrypoint for the container
+    entrypoint: bash
+    stdin_open: true
+    tty: true
+
+  graspqp:
+    env_file: .env.base
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile.graspqp
+    image: graspqp
+    container_name: graspqp
+    volumes:
+      - type: bind
+        source: ../
+        target: /workspace/graspqp
+      - type: bind
+        source: /media/zrene/data/GraspGen/
+        target: /data
+    network_mode: host
+    deploy: *default-graspqp_isaaclab-deploy
+    entrypoint: bash
+    stdin_open: true
+    tty: true

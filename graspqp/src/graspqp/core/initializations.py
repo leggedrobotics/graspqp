@@ -61,7 +61,9 @@ def initialize_convex_hull(hand_model, object_model, args, env_mask=None, energy
                 # sample points
                 dense_point_cloud = torch.from_numpy(points).to(device).unsqueeze(0)
 
-                p = pytorch3d.ops.sample_farthest_points(dense_point_cloud, K=batch_size_each, random_start_point=not init_contacts)[0][0]
+                p = pytorch3d.ops.sample_farthest_points(
+                    dense_point_cloud, K=batch_size_each, random_start_point=not init_contacts
+                )[0][0]
                 closest_points, _, _ = mesh_origin.nearest.on_surface(p.detach().cpu().numpy())
                 success = True
             except FloatingPointError as e:
@@ -79,7 +81,12 @@ def initialize_convex_hull(hand_model, object_model, args, env_mask=None, energy
         # by default, align hands +z axis with the normal of the inflated convex hull
         rotation_global = torch.zeros([batch_size_each, 3, 3], dtype=torch.float, device=device)
 
-        def look_at(camera_positions, target_positions, forward_vector=torch.tensor([1, 0, 0]), up_vector=torch.tensor([0, 0, 1], dtype=torch.float)):
+        def look_at(
+            camera_positions,
+            target_positions,
+            forward_vector=torch.tensor([1, 0, 0]),
+            up_vector=torch.tensor([0, 0, 1], dtype=torch.float),
+        ):
             base_up_vector = up_vector.to(camera_positions.device).float()
             up_vector = base_up_vector.clone().float()
             forward_vector = forward_vector.to(camera_positions.device).float()
@@ -93,7 +100,9 @@ def initialize_convex_hull(hand_model, object_model, args, env_mask=None, energy
             # 2. Compute the right vectors (perpendicular to forward and up vectors)
             # inner product up and forward vectors
             prod = torch.sum(up_vector * forward, dim=1, keepdim=True)
-            up_vector = torch.where(prod.abs() < 0.95, up_vector, torch.tensor([0, 1, 0], dtype=torch.float, device=up_vector.device))
+            up_vector = torch.where(
+                prod.abs() < 0.95, up_vector, torch.tensor([0, 1, 0], dtype=torch.float, device=up_vector.device)
+            )
             right = torch.cross(up_vector, forward, dim=1)
             right = right / torch.norm(right, dim=1, keepdim=True)  # Normalize along the batch dimension
 
@@ -102,7 +111,9 @@ def initialize_convex_hull(hand_model, object_model, args, env_mask=None, energy
             # 4. Construct the batched 3x3 orientation matrices
             # Stack the right, up, and forward vectors into 3x3 matrices
             orientation_matrices = torch.stack([forward, up, right], dim=-1)
-            basis = torch.stack([forward_vector, -torch.cross(forward_vector, base_up_vector, dim=-1), base_up_vector], dim=-1)
+            basis = torch.stack(
+                [forward_vector, -torch.cross(forward_vector, base_up_vector, dim=-1), base_up_vector], dim=-1
+            )
 
             return orientation_matrices @ basis
 
@@ -110,20 +121,47 @@ def initialize_convex_hull(hand_model, object_model, args, env_mask=None, energy
             rotation_global[j] = torch.eye(3, dtype=torch.float, device=device)
         rotation_global = look_at(p, p + n, up_vector=hand_model.up_axis, forward_vector=hand_model.forward_axis)
 
-        distance = args.distance_lower + (args.distance_upper - args.distance_lower) * torch.rand([batch_size_each], dtype=torch.float, device=device)
+        distance = args.distance_lower + (args.distance_upper - args.distance_lower) * torch.rand(
+            [batch_size_each], dtype=torch.float, device=device
+        )
 
         # Rotation around the normal vector. In the plane of the contact point
-        rotate_theta = args.rotate_lower + (args.rotate_upper - args.rotate_lower) * torch.rand([batch_size_each], dtype=torch.float, device=device)
-        pitch_theta = args.pitch_lower + (args.pitch_upper - args.pitch_lower) * torch.rand([batch_size_each], dtype=torch.float, device=device)
-        tilt_theta = args.tilt_lower + (args.tilt_upper - args.tilt_lower) * torch.rand([batch_size_each], dtype=torch.float, device=device)
+        rotate_theta = args.rotate_lower + (args.rotate_upper - args.rotate_lower) * torch.rand(
+            [batch_size_each], dtype=torch.float, device=device
+        )
+        pitch_theta = args.pitch_lower + (args.pitch_upper - args.pitch_lower) * torch.rand(
+            [batch_size_each], dtype=torch.float, device=device
+        )
+        tilt_theta = args.tilt_lower + (args.tilt_upper - args.tilt_lower) * torch.rand(
+            [batch_size_each], dtype=torch.float, device=device
+        )
 
         rotation_local = torch.zeros([batch_size_each, 3, 3], dtype=torch.float, device=device)
 
         for j in range(batch_size_each):
-            rotation_local[j] = torch.tensor(transforms3d.euler.euler2mat(tilt_theta[j], pitch_theta[j], rotate_theta[j], axes="rxyz"), dtype=torch.float, device=device)
+            rotation_local[j] = torch.tensor(
+                transforms3d.euler.euler2mat(tilt_theta[j], pitch_theta[j], rotate_theta[j], axes="rxyz"),
+                dtype=torch.float,
+                device=device,
+            )
 
-        translation[i * batch_size_each : (i + 1) * batch_size_each] = p - distance.unsqueeze(1) * n  # * (rotation_global @ rotation_local @ torch.tensor([0, 0, 1], dtype=torch.float, device=device).reshape(1, -1, 1)).squeeze(2)
+        translation[i * batch_size_each : (i + 1) * batch_size_each] = (
+            p - distance.unsqueeze(1) * n
+        )  # * (rotation_global @ rotation_local @ torch.tensor([0, 0, 1], dtype=torch.float, device=device).reshape(1, -1, 1)).squeeze(2)
         rotation[i * batch_size_each : (i + 1) * batch_size_each] = rotation_global @ rotation_local  # @ rotation_hand
+
+        # For handles
+
+        # rotmat = rotation_global @ rotation_local
+        # import roma
+        # import numpy as np
+
+        # eulers = roma.rotmat_to_euler("ZYX", rotmat)
+        # eulers[..., 0] = torch.randn_like(eulers[..., 0]) * np.pi  # random
+        # eulers[..., 1] = torch.randn_like(eulers[..., 1]) * 0.5  # small noise
+        # eulers[..., 2] = -np.pi / 2
+        # rotmat = roma.euler_to_rotmat("ZYX", eulers)
+        # rotation[i * batch_size_each : (i + 1) * batch_size_each] = rotmat
 
     joint_angles_mu = hand_model.default_state
     joint_angles_mu.clamp_(hand_model.joints_lower, hand_model.joints_upper)
@@ -131,7 +169,13 @@ def initialize_convex_hull(hand_model, object_model, args, env_mask=None, energy
 
     joint_angles = torch.zeros([total_batch_size, hand_model.n_dofs], dtype=torch.float, device=device)
     for i in range(hand_model.n_dofs):
-        torch.nn.init.trunc_normal_(joint_angles[:, i], joint_angles_mu[i], joint_angles_sigma[i], hand_model.joints_lower[i] - 1e-6, hand_model.joints_upper[i] + 1e-6)
+        torch.nn.init.trunc_normal_(
+            joint_angles[:, i],
+            joint_angles_mu[i],
+            joint_angles_sigma[i],
+            hand_model.joints_lower[i] - 1e-6,
+            hand_model.joints_upper[i] + 1e-6,
+        )
 
     HANDLE_MODE = "handles" in object_model.data_root_path
     if HANDLE_MODE:
@@ -145,5 +189,7 @@ def initialize_convex_hull(hand_model, object_model, args, env_mask=None, energy
 
     # initialize contact point indices
     hand_pose.requires_grad_()
-    contact_point_indices = torch.randint(hand_model.n_contact_candidates, size=[total_batch_size, args.n_contact], device=device)
+    contact_point_indices = torch.randint(
+        hand_model.n_contact_candidates, size=[total_batch_size, args.n_contact], device=device
+    )
     hand_model.set_parameters(hand_pose, contact_point_indices, env_mask=env_mask)

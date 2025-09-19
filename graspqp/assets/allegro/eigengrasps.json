@@ -48,7 +48,8 @@
     "thumb_link_3": {
       "n_points": 8
     }
-  },"pinch": {
+  },
+  "pinch": {
     "index_link_3": {
       "n_points": 8
     },

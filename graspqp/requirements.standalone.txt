@@ -1,0 +1,20 @@
+# torch==2.5.1+cu118 torchvision==0.20.1+cu118
+# numpy
+# trimesh==4.8.0
+transforms3d
+plotly
+roma
+pyaml
+six
+lxml
+warp_lang
+scipy
+rtree
+wandb
+qpth
+pytest
+matplotlib
+
+# thirdparty/pytorch_kinematics
+# "git+https://github.com/facebookresearch/pytorch3d.git"
+# pip install -e .     thirdparty/torchsdf

@@ -1,0 +1,52 @@
+# Official PyTorch image with CUDA 12.8, cuDNN 9, and build tools
+FROM pytorch/pytorch:2.7.0-cuda12.8-cudnn9-devel
+
+# Install common build essentials and Python dev tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    git \
+    curl \
+    vim \
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /workspace/graspqp
+
+
+
+
+# Install Kaolin
+RUN --mount=type=cache,target=/root/.cache/pip \
+    bash -i -c "source ${HOME}/.bashrc && \
+    pip install --find-links https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.7.0_cu128.html  kaolin==0.18.0"
+
+# Install PyTorch3D
+RUN --mount=type=cache,target=/root/.cache/pip \
+    bash -i -c "source ${HOME}/.bashrc && \
+    TORCH_CUDA_ARCH_LIST='8.0;8.6;8.9;9.0' FORCE_CUDA=1 python -m pip install --no-build-isolation  git+https://github.com/facebookresearch/pytorch3d.git@stable"
+
+
+# Copy GraspQP repository
+COPY .. /workspace/graspqp
+
+# Install GraspQP Dependencies
+RUN --mount=type=cache,target=/root/.cache/pip bash -i -c "source ${HOME}/.bashrc && \
+    cd /workspace/graspqp/thirdparty/pytorch_kinematics && \
+    pip install -e . && \
+    cd  /workspace/graspqp/thirdparty/TorchSDF && pip install -e . --no-build-isolation"
+
+# Install GraspQP
+RUN --mount=type=cache,target=/root/.cache/pip bash -i -c "source ${HOME}/.bashrc && \
+    cd /workspace/graspqp/graspqp/ && \
+    pip install -r requirements.standalone.txt && \
+    pip install -e ."
+
+
+
+# # Working directory
+# WORKDIR /workspace
+
+# # Default command
+# CMD ["bash"]

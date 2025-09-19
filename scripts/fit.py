@@ -92,16 +92,19 @@ parser.add_argument("--reset_epochs", default=600, type=int)
 parser.add_argument("--optimizer", default="mala_star", type=str, choices=["mala_star", "dexgraspnet"])
 parser.add_argument("--initialization", default="convex_hull", type=str, choices=["random", "convex_hull"])
 
+parser.add_argument("--w_prior", default=0.0, type=float)
+parser.add_argument("--w_wall", default=0.0, type=float)
+
 parser.add_argument(
     "--energy_type",
     default="graspqp",
     type=str,
-    choices=["dexgrasp", "graspqp", "softmax_eucledian_cone", "span_eucledian_theseus", "span_eucledian_sqp", "span_eucledian_cone_theseus", "span_eucledian_cone_sqp", "span_overall_theseus", "span_overall_sqp", "span_overall_cone_theseus", "span_overall_cone_ours", "span_overall_cone_sqp", "span_overall_cone_sqp_no_temp", "span_overall_cone_qp", "span_overall_cone_cvxpy", "simple_dexgrasp", "softmax_pull", "dexgrasp_baseline", "gendexgrasp", "span_overall_cone_sqp_ii", "init", "tdg", "handle"],
+    choices=["dexgrasp", "graspqp", "tdg"],
 )
 
 parser.add_argument("--debug", action="store_true")
 parser.add_argument("--selected_object", default=None, type=str)
-parser.add_argument("--dataset", default="tiny", type=str)
+parser.add_argument("--dataset", default="debug", type=str)
 parser.add_argument(
     "--data_root_path",
     default=None,
@@ -118,7 +121,7 @@ parser.add_argument("--wandb_project", default="graspqp", type=str)
 parser.add_argument("--log_to_wandb", action="store_true")
 parser.add_argument("--no_plotly", action="store_true")
 
-parser.add_argument("--hand_name", default="robotiq3", type=str, choices=AVAILABLE_HANDS)
+parser.add_argument("--hand_name", default="allegro", type=str, choices=AVAILABLE_HANDS)
 
 parser.add_argument("--norm_sampling", action="store_true")
 parser.add_argument("--w_svd", default=0.1, type=float)
@@ -137,7 +140,7 @@ parser.add_argument("--no_exp_term", action="store_true")  # Disable exploration
 args = parser.parse_args()
 
 if args.data_root_path is None:
-    args.data_root_path = os.path.join("/data/DexGraspNet", args.dataset)
+    args.data_root_path = os.path.join("/data/release", args.dataset)
 
 # Check if PYTHON_EULER_ROOT env exists
 if "PYTHON_EULER_ROOT" in os.environ:
@@ -153,8 +156,11 @@ if args.energy_name is None:
 
 if args.object_code_file is not None:
     print("File with object codes provided")
+    if not os.path.exists(args.object_code_file):
+        raise ValueError(f"File {args.object_code_file} does not exist")
     with open(args.object_code_file, "r") as f:
-        args.object_code_list = f.read().split(" ")
+        # trim whistespace and split by space or new line
+        args.object_code_list = f.read().replace("\n", " ").strip().split(" ")
 
 if len(args.object_code_list) == 0:
     print("Using all objects in the data root path")
@@ -209,26 +215,7 @@ os.makedirs(
     os.path.join(args.data_root_path, args.object_code_list[0], "grasp_predictions"),
     exist_ok=True,
 )
-
-
-def get_render_path(asset_id):
-    path = os.path.join(
-        os.path.join(
-            args.data_root_path,
-            args.object_code_list[asset_id],
-            "renderings",
-            args.hand_name,
-            f"{args.n_contact}_contacts",
-            args.energy_name,
-        )
-    )
-    if args.grasp_type in [None, "all"]:
-        path = os.path.join(path, "default")
-    else:
-        path = os.path.join(path, args.grasp_type)
-
-    os.makedirs(path, exist_ok=True)
-    return path
+print("Logging to:", os.path.join(args.data_root_path, args.object_code_list[0], "grasp_predictions"))
 
 
 def get_result_path(asset_id):
@@ -261,19 +248,25 @@ def export_poses(hand_model, energy, object_model, suffix="None"):
     distance, contact_normal = object_model.cal_distance(hand_model.contact_points)
     contact_normal = 5 * (contact_normal * distance.unsqueeze(-1).abs())  # .clamp(min=5e-3)
 
-    delta_theta, residuals, ee_vel = hand_model.get_req_joint_velocities(-contact_normal, hand_model.contact_point_indices, return_ee_vel=True)
+    delta_theta, residuals, ee_vel = hand_model.get_req_joint_velocities(
+        -contact_normal, hand_model.contact_point_indices, return_ee_vel=True
+    )
     #
     hand_model._set_contact_idxs("all")
     distance_full, contact_normal_full = object_model.cal_distance(hand_model.contact_points)
     contact_normal_full = 5 * (contact_normal_full * distance_full.unsqueeze(-1).abs())  # .clamp(min=5e-3)
-    delta_theta_full, _ = hand_model.get_req_joint_velocities(-contact_normal_full, hand_model.contact_point_indices, return_ee_vel=False)
+    delta_theta_full, _ = hand_model.get_req_joint_velocities(
+        -contact_normal_full, hand_model.contact_point_indices, return_ee_vel=False
+    )
     hand_model._set_contact_idxs(old_contact_indices)
 
     # hand_model.closing_force_des
     distance, contact_normal = object_model.cal_distance(hand_model.contact_points)
     contact_normal = 5 * contact_normal * (distance.unsqueeze(-1).abs() + 0.005)  # .clamp(min=5e-3)
 
-    delta_theta_off, residuals, ee_vel = hand_model.get_req_joint_velocities(-contact_normal, hand_model.contact_point_indices, return_ee_vel=True)
+    delta_theta_off, residuals, ee_vel = hand_model.get_req_joint_velocities(
+        -contact_normal, hand_model.contact_point_indices, return_ee_vel=True
+    )
 
     for asset_idx in range(len(args.object_code_list)):
         data = {"values": energies[asset_idx * args.batch_size : (asset_idx + 1) * args.batch_size]}
@@ -297,8 +290,12 @@ def export_poses(hand_model, energy, object_model, suffix="None"):
         grasp_velocities_off = {}
         for idx in range(joint_delta.shape[1]):
             grasp_velocities[hand_model._actuated_joints_names[idx]] = joint_delta[:, idx].detach().cpu()
-            full_grasp_velocities[hand_model._actuated_joints_names[idx]] = delta_theta_full[start_idx:end_idx, idx].detach().cpu()
-            grasp_velocities_off[hand_model._actuated_joints_names[idx]] = delta_theta_off[start_idx:end_idx, idx].detach().cpu()
+            full_grasp_velocities[hand_model._actuated_joints_names[idx]] = (
+                delta_theta_full[start_idx:end_idx, idx].detach().cpu()
+            )
+            grasp_velocities_off[hand_model._actuated_joints_names[idx]] = (
+                delta_theta_off[start_idx:end_idx, idx].detach().cpu()
+            )
 
         SHOW = False
         if SHOW:
@@ -375,6 +372,8 @@ elif args.energy_type == "graspqp":
             "n_cone_vecs": args.n_friction_cone,
         },
     )
+elif args.energy_type == "handle":
+    energy_fnc = GraspSpanMetricFactory.create(GraspSpanMetricFactory.MetricType.HANDLE)
 else:
     raise NotImplementedError("Energy type not implemented")
 
@@ -385,6 +384,8 @@ weight_dict = {
     "E_pen": args.w_pen,
     "E_spen": args.w_spen,
     "E_joints": args.w_joints,
+    "E_prior": args.w_prior,
+    "E_wall": args.w_wall,
 }
 
 energy_names = [e for e in weight_dict.keys() if weight_dict[e] > 0.0]
@@ -484,7 +485,8 @@ for step in tqdm(range(1, args.n_iter + 1), desc="optimizing"):
                 "entropy/joints_entropy": joints_entropy.mean(),
                 "entropy/translation_entropy": translation_entropy.mean(),
                 "entropy/rotation_entropy": rotation_entropy.mean(),
-                "entropy/total": 0.5 * joints_entropy.mean() + 0.5 * (translation_entropy.mean() + rotation_entropy.mean()),
+                "entropy/total": 0.5 * joints_entropy.mean()
+                + 0.5 * (translation_entropy.mean() + rotation_entropy.mean()),
                 "stats/score": score.mean(),
             }
             wandb.log(data, step=step, commit=False)
@@ -501,7 +503,7 @@ for step in tqdm(range(1, args.n_iter + 1), desc="optimizing"):
             step=step,
         )
 
-        if args.debug and step % 50 == 0:
+        if args.debug and step % 50 == 1:
             show_initialization(object_model, hand_model, args.batch_size, len(args.object_code_list))
             test = input("Continue? (y/n)")
             if test == "n":

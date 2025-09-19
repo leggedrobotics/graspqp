@@ -526,7 +526,7 @@ def _flatten(arr):
 
 def _show_dir(dir, args, device, origin=(0, 0)):
     data_path = os.path.join(dir, args.hand_name)
-    glob_pattern = os.path.join(data_path, args.num_contacts, args.energy, args.grasp_type, "*7000.dexgrasp.pt")
+    glob_pattern = os.path.join(data_path, args.num_contacts, args.energy, args.grasp_type, "*.dexgrasp.pt")
 
     print(f"Loading from {glob_pattern}")
     if len(glob.glob(glob_pattern, recursive=True)) == 0:
@@ -546,7 +546,7 @@ def _show_dir(dir, args, device, origin=(0, 0)):
     hand_model = get_hand_model(
         args.hand_name,
         args.device,
-        use_collision_if_possible=False,
+        use_collision_if_possible=True,
         grasp_type=checkpoint_data.get("grasp_type", None),
     )
     params = checkpoint_data["parameters"]
@@ -670,7 +670,9 @@ def _show_dir(dir, args, device, origin=(0, 0)):
 
     distance, contact_normal = object_model.cal_distance(hand_model.contact_points)
     contact_normal = contact_normal * 0.025  # distance.abs().unsqueeze(-1)*3
-    delta_theta, residuals, ee_vel = hand_model.get_req_joint_velocities(-contact_normal, hand_model.contact_point_indices, return_ee_vel=True)
+    delta_theta, residuals, ee_vel = hand_model.get_req_joint_velocities(
+        -contact_normal, hand_model.contact_point_indices, return_ee_vel=True
+    )
 
     for env_id in range(min(args.max_grasps, len(joint_states))):
         data = []
@@ -823,12 +825,17 @@ def _show_dir(dir, args, device, origin=(0, 0)):
                 # ) + self.global_translation.unsqueeze(1)
                 contacts_local = hand_model.mesh[link_name]["contact_candidates"]
                 transformed_contacts = hand_model.current_status[link_name].transform_points(contacts_local)
-                transformed_contacts = transformed_contacts @ hand_model.global_rotation.transpose(1, 2) + hand_model.global_translation.unsqueeze(1)
+                transformed_contacts = transformed_contacts @ hand_model.global_rotation.transpose(
+                    1, 2
+                ) + hand_model.global_translation.unsqueeze(1)
                 cog_links = transformed_contacts[env_id].mean(0, keepdim=True)
                 cog_links_w = cog_links + torch.from_numpy(offset).to(args.device).float()
 
                 motion_start = cog_links_w.cpu().numpy()[0]
-                motion_end = motion_start + (linear_jacobian[None] @ hand_model.global_rotation[env_id].transpose(0, 1)).cpu().numpy()[0]
+                motion_end = (
+                    motion_start
+                    + (linear_jacobian[None] @ hand_model.global_rotation[env_id].transpose(0, 1)).cpu().numpy()[0]
+                )
                 # draw the line
                 data.append(
                     go.Scatter3d(
@@ -870,7 +877,9 @@ def _show_dir(dir, args, device, origin=(0, 0)):
 
                 import matplotlib.cm as cm
 
-                color = cm.viridis((energy[env_id] - energy.min()).cpu().numpy() / (energy.max() - energy.min()).cpu().numpy())
+                color = cm.viridis(
+                    (energy[env_id] - energy.min()).cpu().numpy() / (energy.max() - energy.min()).cpu().numpy()
+                )
                 color_rgb_str = f"rgb({int(color[0]*255)},{int(color[1]*255)},{int(color[2]*255)})"
                 text = f"{energy_name}: {energy[env_id]:.2f}"
                 spacing = 0.04
@@ -914,7 +923,11 @@ def _show_dir(dir, args, device, origin=(0, 0)):
                     linear_forces = cache["linear_forces"][env_id].cpu().numpy()
 
                     coef = cache["results"][-1][env_id].cpu().numpy().squeeze()
-                    r_contact = cache["r_cog_contact"][env_id].cpu().numpy() + offset + object_model.cog[env_id].detach().cpu().numpy()
+                    r_contact = (
+                        cache["r_cog_contact"][env_id].cpu().numpy()
+                        + offset
+                        + object_model.cog[env_id].detach().cpu().numpy()
+                    )
 
                     r_end = r_contact + linear_forces  # * (coef - 1)[:, None] * 0.05
 
@@ -1021,7 +1034,9 @@ def _show_dir(dir, args, device, origin=(0, 0)):
 
                 elif energy_name == "span_eucledian_scipy" and SHOW_EUCLEDIAN:
                     cache = energy_fnc.metric._cache
-                    basis = cache["basis"]  # Direction of the 12 basis vectors. First 6 are for forces, last 6 are for moments
+                    basis = cache[
+                        "basis"
+                    ]  # Direction of the 12 basis vectors. First 6 are for forces, last 6 are for moments
 
                     basis_force = torch.cat([basis[env_id, :3, :3], basis[env_id, 6:9, :3]], dim=0).cpu().numpy()
                     basis_moment = torch.cat([basis[env_id, 3:6, 3:], basis[env_id, 9:, 3:]], dim=0).cpu().numpy()
@@ -1052,11 +1067,15 @@ def _show_dir(dir, args, device, origin=(0, 0)):
                     MAX_LENGTH = 0.04
                     length_force_axis = (1 - error_force * 4).clip(0, 1) * MAX_LENGTH
                     length_moment_axis = (1 - error_moment * 4).clip(0, 1) * MAX_LENGTH
-                    force_axis_start = (object_model.cog[env_id].detach().cpu().numpy() + offset)[None].repeat(len(length_force_axis), 0) + np.array([0, 0.05, -0.3])
+                    force_axis_start = (object_model.cog[env_id].detach().cpu().numpy() + offset)[None].repeat(
+                        len(length_force_axis), 0
+                    ) + np.array([0, 0.05, -0.3])
                     force_axis_end = force_axis_start + length_force_axis[:, None] * basis_force
                     force_axis_end_gt = force_axis_start + 0.95 * MAX_LENGTH * basis_force
 
-                    moment_axis_start = (object_model.cog[env_id].detach().cpu().numpy() + offset)[None].repeat(len(length_moment_axis), 0) + np.array([0, -0.05, -0.3])
+                    moment_axis_start = (object_model.cog[env_id].detach().cpu().numpy() + offset)[None].repeat(
+                        len(length_moment_axis), 0
+                    ) + np.array([0, -0.05, -0.3])
                     moment_axis_end = moment_axis_start + length_moment_axis[:, None] * basis_moment
                     moment_axis_end_gt = moment_axis_start + 0.95 * MAX_LENGTH * basis_moment
 
@@ -1101,22 +1120,20 @@ def _show_dir(dir, args, device, origin=(0, 0)):
 
     fig = go.Figure(_flatten(all_data))
     os.makedirs(output_dir, exist_ok=True)
-    convert_plotly_to_gltf(fig, out_path=os.path.join(output_dir, "render.glb"))
-
-    print("\033[94m=> Saved mesh to", os.path.join(output_dir, "render.glb"), "\033[0m")
-
     if args.show:
         # define axes for figure. Make sure no distortion, but to have the same aspect ratio
         lengths = args.spacing * np.sqrt(n_envs)
         fig.update_layout(
-            scene=dict(
-                xaxis=dict(nticks=10, range=[-0.1, lengths], backgroundcolor="white", showbackground=True, zerolinecolor="black"),
-                yaxis=dict(nticks=10, range=[-0.1, lengths], backgroundcolor="white", showbackground=True, zerolinecolor="black"),
-                zaxis=dict(nticks=10, range=[-0.1, lengths], backgroundcolor="white", showbackground=True, zerolinecolor="black"),
-            ),
+            scene=dict(aspectmode="data"),
         )
         fig.show()
         input("Press Enter to continue...")
+    try:
+        convert_plotly_to_gltf(fig, out_path=os.path.join(output_dir, "render.glb"))
+        print("\033[94m=> Saved mesh to", os.path.join(output_dir, "render.glb"), "\033[0m")
+    except Exception as e:
+        print("Failed to convert to gltf:", e)
+
     return all_data
 
 
@@ -1136,7 +1153,13 @@ if __name__ == "__main__":
     arg_parser.add_argument("--show_occupancy_grid", action="store_true", help="show occupancy grid")
     arg_parser.add_argument("--randomize_joints", action="store_true", help="randomize joint angles")
     arg_parser.add_argument("--spacing", type=float, default=0.45, help="spacing for visualization")
-    arg_parser.add_argument("--grasp_type", type=str, default="default", help="grasp type", choices=["default", "pinch", "precision"])
+    arg_parser.add_argument(
+        "--grasp_type",
+        type=str,
+        default="default",
+        help="grasp type",
+        choices=["default", "pinch", "precision", "tips"],
+    )
     arg_parser.add_argument(
         "--dir",
         type=str,
