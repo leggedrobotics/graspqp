@@ -5,36 +5,46 @@ requires = ["setuptools>=61.0", "wheel>=0.37.1"]
 [project]
 name = "graspqp"
 version = "0.0.1"
-dependencies = [
-    # Core libraries
 
+dependencies = [
     "numpy==1.26.4",
     "scipy==1.15.3",
-    "matplotlib==3.10.6",
-    "pytest==8.4.1",
-
-    # Geometry / Math / 3D
-    "trimesh==4.8.0",
     "transforms3d==0.4.2",
-    "qpth==0.0.18",
+    "trimesh==4.8.0",
     "lxml==6.0.1",
-    "rtree==1.4.1",
-
-    # Plotting / Visualization
-    "plotly==6.3.0",
-
-    # Utility / Infra
-    "roma==1.5.4",
-    "pyaml==25.7.0",
-    "six==1.17.0",
-    "wandb==0.21.3",
+    "rtree==1.4.1","roma==1.5.4", "pyaml==25.7.0", "six==1.17.0",
 ]
 
 [project.optional-dependencies]
+
+# Development tools
 dev = [
     "black>=24.0.0",
     "flake8>=7.0.0",
     "mypy>=1.9.0",
+    "pytest==8.4.1",
+]
+third_party = [
+    "pytorch_kinematics @ git+https://github.com/renezurbruegg/pytorch_kinematics",
+    "TorchSDF @ git+https://github.com/renezurbruegg/TorchSDF",
+    "pytorch3d @ git+https://github.com/facebookresearch/pytorch3d.git@stable"
+]
+
+opt = [
+    "qpth==0.0.18",
+]
+viz = [
+    "matplotlib==3.10.6",
+    "plotly==6.3.0",
+]
+log = [
+    "wandb==0.21.3",
+]
+full = [
+    "graspqp[viz,log,opt]",
+]
+core = [
+    "graspqp",
 ]
 
 [tool.black]

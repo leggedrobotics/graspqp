@@ -4,17 +4,15 @@ Author: Ruicheng Wang, Jialiang Zhang
 Description: Class ObjectModel
 """
 
+import contextlib
 import os
 import trimesh as tm
-import plotly.graph_objects as go
 import torch
 import pytorch3d.structures
-import glob
 import pytorch3d.ops
+import glob
 import numpy as np
-
-import warp as wp
-from graspqp.utils import warp as wp_utils
+import contextlib
 
 SDF_BACKEND = os.environ.get("SDF_BACKEND", "TORCHSDF").upper()
 
@@ -25,6 +23,9 @@ elif SDF_BACKEND == "WARP":
     from graspqp.utils import warp as wp_utils
 elif SDF_BACKEND == "KAOLIN":
     import kaolin
+
+with contextlib.suppress(ImportError):
+    import plotly.graph_objects as go
 
 import time
 
@@ -68,7 +69,9 @@ class ObjectModel:
             self._cog = self.surface_points_tensor.mean(dim=1)
         return self._cog
 
-    def initialize(self, object_code_list, sdf_library=SDF_BACKEND, resample_with_fps=True, extension=".obj", convention=None):
+    def initialize(
+        self, object_code_list, sdf_library=SDF_BACKEND, resample_with_fps=True, extension=".obj", convention=None
+    ):
         """
         Initialize Object Model with list of objects
 
@@ -88,7 +91,11 @@ class ObjectModel:
         self.object_face_verts_list = []
         self.surface_points_tensor = []
         for object_code in object_code_list:
-            self.object_scale_tensor.append(self.scale_choice[torch.randint(0, self.scale_choice.shape[0], (self.batch_size_each,), device=self.device)])
+            self.object_scale_tensor.append(
+                self.scale_choice[
+                    torch.randint(0, self.scale_choice.shape[0], (self.batch_size_each,), device=self.device)
+                ]
+            )
             mesh_path = os.path.join(self.data_root_path, object_code, "coacd", "remeshed.obj")
             if not os.path.exists(mesh_path):
                 mesh_path = os.path.join(self.data_root_path, object_code, "coacd", "decomposed.obj")
@@ -145,7 +152,9 @@ class ObjectModel:
                 # create warp mesh from vertices and faces
                 link_vertices, link_faces = object_verts.cpu().numpy(), object_faces.cpu().numpy()
                 verts_wp = wp.from_numpy(np.ascontiguousarray(link_vertices), device=str(self.device), dtype=wp.vec3)
-                faces_wp = wp.from_numpy(np.ascontiguousarray(link_faces.flatten()), device=str(self.device), dtype=wp.int32)
+                faces_wp = wp.from_numpy(
+                    np.ascontiguousarray(link_faces.flatten()), device=str(self.device), dtype=wp.int32
+                )
                 wp_mesh = wp.Mesh(points=verts_wp, indices=faces_wp)
 
                 self.object_face_verts_list.append(wp_mesh)
@@ -172,7 +181,9 @@ class ObjectModel:
         self.object_scale_tensor = torch.stack(self.object_scale_tensor, dim=0)
 
         if self.num_samples != 0:
-            self.surface_points_tensor = torch.stack(self.surface_points_tensor, dim=0).repeat_interleave(self.batch_size_each, dim=0)  # (n_objects * batch_size_each, num_samples, 3)
+            self.surface_points_tensor = torch.stack(self.surface_points_tensor, dim=0).repeat_interleave(
+                self.batch_size_each, dim=0
+            )  # (n_objects * batch_size_each, num_samples, 3)
 
     def cal_distance(self, x, with_closest_points=False):
         """
@@ -222,7 +233,11 @@ class ObjectModel:
                 (face_verts, face_indexes, verts) = self.object_face_verts_list[i]
                 dis, _, _ = kaolin.metrics.trianglemesh.point_to_mesh_distance(x[i].unsqueeze(0), face_verts)
                 dis_signs = kaolin.ops.mesh.check_sign(verts.unsqueeze(0), face_indexes, x[i].unsqueeze(0))
-                dis_signs = torch.where(dis_signs, -1 * torch.ones_like(dis_signs, dtype=torch.int32), torch.ones_like(dis_signs, dtype=torch.int32))
+                dis_signs = torch.where(
+                    dis_signs,
+                    -1 * torch.ones_like(dis_signs, dtype=torch.int32),
+                    torch.ones_like(dis_signs, dtype=torch.int32),
+                )
 
             if with_closest_points:
                 closest_points.append(x[i] - dis.sqrt().unsqueeze(1) * normal)
@@ -272,12 +287,25 @@ class ObjectModel:
         if len(vertices) > 2000 and simplify:
             import open3d as o3d
 
-            o3d_mesh = o3d.geometry.TriangleMesh(vertices=o3d.utility.Vector3dVector(vertices), triangles=o3d.utility.Vector3iVector(mesh.faces))
+            o3d_mesh = o3d.geometry.TriangleMesh(
+                vertices=o3d.utility.Vector3dVector(vertices), triangles=o3d.utility.Vector3iVector(mesh.faces)
+            )
             o3d_mesh = o3d_mesh.simplify_quadric_decimation(2000)
             mesh = tm.Trimesh(vertices=np.array(o3d_mesh.vertices), faces=np.array(o3d_mesh.triangles))
         if offset is not None:
             vertices += np.array(offset)
-        data = go.Mesh3d(x=vertices[:, 0], y=vertices[:, 1], z=vertices[:, 2], i=mesh.faces[:, 0], j=mesh.faces[:, 1], k=mesh.faces[:, 2], color=color, opacity=opacity, legendgroup="Object", showlegend=True)
+        data = go.Mesh3d(
+            x=vertices[:, 0],
+            y=vertices[:, 1],
+            z=vertices[:, 2],
+            i=mesh.faces[:, 0],
+            j=mesh.faces[:, 1],
+            k=mesh.faces[:, 2],
+            color=color,
+            opacity=opacity,
+            legendgroup="Object",
+            showlegend=True,
+        )
         all_data = [data]
 
         return all_data

@@ -9,11 +9,16 @@ import torch
 from graspqp.utils.transforms import (
     robust_compute_rotation_matrix_from_ortho6d,
 )
+import contextlib
+
+with contextlib.suppress(ImportError):
+    import plotly.graph_objects as go
+
 import pytorch_kinematics as pk
-import plotly.graph_objects as go
 import pytorch3d.structures
 import pytorch3d.ops
 import trimesh as tm
+import contextlib
 
 SDF_BACKEND = os.environ.get("SDF_BACKEND", "TORCHSDF").upper()
 
@@ -27,10 +32,8 @@ elif SDF_BACKEND == "KAOLIN":
 
 import trimesh
 
-try:
+with contextlib.suppress(ImportError):
     import open3d as o3d
-except:
-    print("Warning: open3d not found")
 import roma
 
 from pytorch_kinematics.transforms.rotation_conversions import matrix_to_quaternion
