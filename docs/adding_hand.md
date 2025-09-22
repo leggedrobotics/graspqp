@@ -148,6 +148,7 @@ python scripts/visualize_hand_model.py --hand_name schunk2
 ```
 
 This should show your hand and the current origin.
+
 <img src="image.png" alt="Example image of the initial hand visualization" width="640" />
 
 Make sure the hand follows these coordinate frame conventions:
@@ -176,6 +177,7 @@ python scripts/visualize_hand_model.py --hand_name schunk2
 ```
 
 The hand should now be aligned correctly:
+
 <img src="image-1.png" alt="Correctly Aligned Hand" width="640" />
 
 ### 6. Validate collision meshes
@@ -197,6 +199,7 @@ python scripts/visualize_hand_model.py --hand_name schunk2 --show_occupancy_grid
 <img src="image-2.png" alt="Corrupted collision meshes" width="640" />
 
 To fix this, see the Blender remeshing examples: [Remeshing in Blender](docs/remeshing_in_blender.md). After remeshing, the visualization should look like this:
+
 <img src="image-3.png" alt="Correctly Aligned Hand and Collision Meshes" width="640" />
 
 ### 7. Provide contact and penetration configs
@@ -236,6 +239,7 @@ python scripts/visualize_hand_model.py --hand_name schunk2
 ```
 
 Green dots indicate the contact points sampled on the hand links.
+
 <img src="image-5.png" alt="Hand with Contact points" width="640" />
 
 ### 8. Add custom FK/Jacobian (optional)
@@ -332,6 +336,7 @@ python scripts/visualize_hand_model.py --hand_name schunk2 --show_jacobian --ran
 ```
 
 The result (for the Schunk EGU-50) should look like this:
+
 <img src="image-4.png" alt="Example Jacobian" width="640" />
 Orange lines indicate the jacobian’s predicted motion direction for each joint.
 
