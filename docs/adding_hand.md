@@ -85,12 +85,12 @@ xacro urdf/egu_50.urdf.xacro > schunk_urdf/schunk.urdf
 cp -r meshes schunk_urdf/
 # Remove package:// prefixes in URDF (path adjust)
 sed -i 's|package://egu_description/||g' schunk_urdf/schunk.urdf
-cp -r schunk_urdf "${GRASP_PATH}"/graspqp/assets/schunk_2f/
 ```
 
 ### 2. Place files in the repository
 
 ```bash
+cp -r schunk_urdf "${GRASP_PATH}"/graspqp/assets/schunk_2f/
 # Create empty config files to start with; fill them later.
 echo "{}" > "$GRASP_PATH"/graspqp/assets/schunk_2f/contact_points.json
 echo "{}" > "$GRASP_PATH"/graspqp/assets/schunk_2f/penetration_points.json
@@ -148,7 +148,7 @@ python scripts/visualize_hand_model.py --hand_name schunk2
 ```
 
 This should show your hand and the current origin.
-![Example image of the initial hand visualization](image.png)
+<img src="image.png" alt="Example image of the initial hand visualization" width="640" />
 
 Make sure the hand follows these coordinate frame conventions:
 
@@ -176,7 +176,7 @@ python scripts/visualize_hand_model.py --hand_name schunk2
 ```
 
 The hand should now be aligned correctly:
-![Correctly Aligned Hand](image-1.png)
+<img src="image-1.png" alt="Correctly Aligned Hand" width="640" />
 
 ### 6. Validate collision meshes
 
@@ -194,10 +194,10 @@ For example, the default collision meshes for the Schunk EGU-50 are corrupted:
 python scripts/visualize_hand_model.py --hand_name schunk2 --show_occupancy_grid
 ```
 
-![Corrupted collision meshes](image-2.png)
+<img src="image-2.png" alt="Corrupted collision meshes" width="640" />
 
 To fix this, see the Blender remeshing examples: [Remeshing in Blender](docs/remeshing_in_blender.md). After remeshing, the visualization should look like this:
-![Correctly Aligned Hand and Collision Meshes](image-3.png)
+<img src="image-3.png" alt="Correctly Aligned Hand and Collision Meshes" width="640" />
 
 ### 7. Provide contact and penetration configs
 
@@ -236,7 +236,7 @@ python scripts/visualize_hand_model.py --hand_name schunk2
 ```
 
 Green dots indicate the contact points sampled on the hand links.
-![Hand with Contact points](image-5.png)
+<img src="image-5.png" alt="Hand with Contact points" width="640" />
 
 ### 8. Add custom FK/Jacobian (optional)
 
@@ -332,7 +332,7 @@ python scripts/visualize_hand_model.py --hand_name schunk2 --show_jacobian --ran
 ```
 
 The result (for the Schunk EGU-50) should look like this:
-![Example Jacobian](image-4.png)
+<img src="image-4.png" alt="Example Jacobian" width="640" />
 Orange lines indicate the jacobian’s predicted motion direction for each joint.
 
 ### 10. Custom grasp types (optional)
