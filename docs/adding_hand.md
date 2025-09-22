@@ -198,7 +198,15 @@ python scripts/visualize_hand_model.py --hand_name schunk2 --show_occupancy_grid
 
 <img src="image-2.png" alt="Corrupted collision meshes" width="640" />
 
-To fix this, see the Blender remeshing examples: [Remeshing in Blender](docs/remeshing_in_blender.md). After remeshing, the visualization should look like this:
+To fix this, remesh the collision meshes in Blender using the smooth modifier (click on the image to watch the video):
+
+[![Watch the video](https://img.youtube.com/vi/nz_PZ0RDFCU/0.jpg)](https://youtu.be/nz_PZ0RDFCU)
+
+<!-- <video width="640" height="360" controls>
+
+  <source src="">
+  Your browser does not support the video tag.
+</video> -->
 
 <img src="image-3.png" alt="Correctly Aligned Hand and Collision Meshes" width="640" />
 
@@ -207,11 +215,13 @@ To fix this, see the Blender remeshing examples: [Remeshing in Blender](docs/rem
 For each link that should be used for contact sampling, extract meshes to sample contact points and place them in the `meshes/contacts/` folder.
 Example:
 
-<video width="640" height="360" controls>
+[![Video for contact meshes](https://img.youtube.com/vi/Jjc_0q2Zi3E/0.jpg)](https://youtu.be/Jjc_0q2Zi3E)
+
+<!-- <video width="640" height="360" controls>
 
   <source src="contact_meshes.mp4" type="video/mp4">
   Your browser does not support the video tag.
-</video>
+</video> -->
 
 Then, register these meshes in `contact_points.json` with the number of contact points to sample from each mesh.
 
@@ -373,4 +383,4 @@ python scripts/fit.py --data_root_path /<path_to_dataset>/full --hand_name schun
 
 ## Troubleshooting
 
-- Collisions not working as expected? Ensure `<collision>` meshes reference `collisions/...` and that files exist. Verify validity with the occupancy grid visualization. If needed, remesh in Blender (see [Remeshing in Blender](docs/remeshing_in_blender.md)).
+- Collisions not working as expected? Ensure `<collision>` meshes reference `collisions/...` and that files exist. Verify validity with the occupancy grid visualization. If needed, remesh in Blender.
