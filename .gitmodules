@@ -1,0 +1,6 @@
+[submodule "thirdparty/pytorch_kinematics"]
+	path = thirdparty/pytorch_kinematics
+	url = git@github.com:renezurbruegg/pytorch_kinematics.git
+[submodule "thirdparty/TorchSDF"]
+	path = thirdparty/TorchSDF
+	url = git@github.com:renezurbruegg/TorchSDF.git
