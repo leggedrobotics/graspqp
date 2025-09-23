@@ -1,4 +1,4 @@
-# Adding a new hand to Isaac Lab (GraspQP integration)
+# Adding a new hand to Isaac Lab
 
 This guide shows how to add a new gripper/hand (example: Schunk 2F) to the GraspQP Isaac Lab integration.
 
@@ -10,7 +10,7 @@ Use Isaac Sim’s URDF importer to convert your hand to USD. For Schunk 2F, conv
 - Verify collision meshes and joint names match your expectations
 - Save the resulting USD file(s)
 
-![URDF to USD import example](image-6.png)
+![URDF to USD import example](images/add_hand.gif)
 
 ## Step 2 — Place assets in the repository
 
