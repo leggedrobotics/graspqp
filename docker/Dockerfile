@@ -48,7 +48,13 @@ RUN --mount=type=cache,target=/root/.cache/pip bash -i -c "source ${HOME}/.bashr
     pip install -e ."
 
 
+# For singularity use
+RUN mkdir -p /data
+
 WORKDIR /workspace
+
+RUN --mount=type=cache,target=/root/.cache/pip bash -i -c "source ${HOME}/.bashrc && \
+    pip install git+https://github.com/renezurbruegg/TorchSDF --no-build-isolation"
 
 # # make working directory as the Isaac Lab directory
 # # this is the default directory when the container is run
