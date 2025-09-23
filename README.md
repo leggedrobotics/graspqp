@@ -167,8 +167,8 @@ python scripts/isaaclab/show_object_grasp.py --static_show
 
 - Allegro, Shadow Hand, Panda gripper, Robotiq 2F, Robotiq 3F, Ability Hand, Schunk 2F
 - See `graspqp/assets/` for URDFs, meshes, and contact configs
-- Adding a new hand (GraspQP): `docs/adding_hand.md`
-- Adding a new hand (Isaac Lab): `docs/adding_hand_isaaclab.md`
+- Adding a new hand (GraspQP): [docs/adding_hand.md](docs/adding_hand.md)
+- Adding a new hand (Isaac Lab): [docs/adding_hand_isaaclab.md](docs/adding_hand_isaaclab.md)
 
 ## Troubleshooting
 
@@ -205,6 +205,6 @@ For questions or issues, please open a GitHub issue. Maintainers: René Zurbrüg
 
 Additional docs:
 
-- Adding a new hand: `docs/adding_hand.md`
-- Project page: https://graspqp.github.io/
-- Paper (arXiv): https://arxiv.org/abs/2508.15002
+- Adding a new hand: [docs/adding_hand.md](docs/adding_hand.md)
+- Project page: [https://graspqp.github.io/](https://graspqp.github.io/)
+- Paper (arXiv): [https://arxiv.org/abs/2508.15002](https://arxiv.org/abs/2508.15002)
