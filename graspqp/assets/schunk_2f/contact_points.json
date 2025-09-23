@@ -1,0 +1,8 @@
+{
+  "egu_50_finger_down": [
+    ["../../schunk_2f/meshes/contacts/gripper_finger_down.STL", 8]
+  ],
+  "egu_50_finger_up": [
+    ["../../schunk_2f/meshes/contacts/gripper_finger_up.STL", 8]
+  ]
+}

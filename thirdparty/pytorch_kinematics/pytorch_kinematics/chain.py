@@ -194,7 +194,9 @@ class Chain(object):
         return frame_poses, theta_idx
 
     @staticmethod
-    def _fk_vectorized_jac(root, theta: torch.Tensor, theta_idx: int, world: tf.Transform3d, parent_jacobian: torch.Tensor):
+    def _fk_vectorized_jac(
+        root, theta: torch.Tensor, theta_idx: int, world: tf.Transform3d, parent_jacobian: torch.Tensor
+    ):
         """
 
         Args:
@@ -202,6 +204,7 @@ class Chain(object):
         """
         child_jacobian = parent_jacobian.clone()
         if root.joint.joint_type != "fixed":
+            print("Processing joint:", root.joint.name, "of type", root.joint.joint_type, "theta idx", theta_idx)
             link_theta = theta[..., theta_idx].view(-1, 1)
             theta_idx += 1
             # axis = (roma.unitquat_to_rotmat(world.get_matrix()[:, :3, :3]) @ axis.unsqueeze(0).unsqueeze(-1)).squeeze(-1)s
@@ -212,11 +215,15 @@ class Chain(object):
         current_link_tf_world = world.compose(current_link_tf_local)
         offset_world = current_link_tf_local.transform_normals(root.link.offset.get_matrix()[..., :3, -1]).squeeze(1)
 
-        current_link_offset = world.transform_normals(current_link_tf_local.get_matrix()[..., :3, -1].unsqueeze(1)).squeeze(1)
+        current_link_offset = world.transform_normals(
+            current_link_tf_local.get_matrix()[..., :3, -1].unsqueeze(1)
+        ).squeeze(1)
         if current_link_offset.ndim == 2:
             current_link_offset = current_link_offset.unsqueeze(-1)
 
-        child_jacobian[..., :3, :] = parent_jacobian[..., :3, :] + parent_jacobian[..., 3:, :].cross(current_link_offset, dim=-2)
+        child_jacobian[..., :3, :] = parent_jacobian[..., :3, :] + parent_jacobian[..., 3:, :].cross(
+            current_link_offset, dim=-2
+        )
 
         if root.joint.joint_type != "fixed":
             # convert into current link frame
@@ -230,7 +237,9 @@ class Chain(object):
         jacobians = [child_jacobian]
         if root.children is not None:
             for child in root.children:
-                child_jacs, theta_idx = Chain._fk_vectorized_jac(child, theta, theta_idx, current_link_tf_world, parent_jacobian=child_jacobian)
+                child_jacs, theta_idx = Chain._fk_vectorized_jac(
+                    child, theta, theta_idx, current_link_tf_world, parent_jacobian=child_jacobian
+                )
                 jacobians += child_jacs
 
         return jacobians, theta_idx
@@ -245,7 +254,9 @@ class Chain(object):
             th = th.unsqueeze(0)
             squeeze = True
         jacobian = torch.zeros(th.shape[0], 6, th.shape[-1], dtype=th.dtype, device=th.device)
-        data = self._fk_vectorized_jac(self._root, th, theta_idx=0, world=tf.Transform3d(device=self.device), parent_jacobian=jacobian)[0]
+        data = self._fk_vectorized_jac(
+            self._root, th, theta_idx=0, world=tf.Transform3d(device=self.device), parent_jacobian=jacobian
+        )[0]
         data = torch.stack(data, dim=1)
         if squeeze:
             data = data.squeeze(0)

@@ -1,9 +1,10 @@
 from graspqp.core import HandModel
 import torch
 
+
 def getHandModel(device: str, asset_dir: str, **kwargs) -> HandModel:
     params = dict(
-        mjcf_path=f"{asset_dir}/robotiq3/robotiq_3finger_flat.urdf",
+        mjcf_path=f"{asset_dir}/robotiq3/ROBOTIQ_3F_CFGinger_flat.urdf",
         mesh_path=f"{asset_dir}/robotiq3/meshes",
         contact_points_path=f"{asset_dir}/robotiq3/contact_points.json",
         penetration_points_path=f"{asset_dir}/robotiq3/penetration_points.json",
@@ -12,9 +13,7 @@ def getHandModel(device: str, asset_dir: str, **kwargs) -> HandModel:
         forward_axis="z",
         up_axis="x",
         use_collision_if_possible=True,
-        default_state=torch.tensor(
-            [0.2, 0.2, 0.2, 0.2, 0.5, 0.5, 0.3, 0.3, 0.3, 0.0, 0.0], device=device
-        ),
+        default_state=torch.tensor([0.2, 0.2, 0.2, 0.2, 0.5, 0.5, 0.3, 0.3, 0.3, 0.0, 0.0], device=device),
     )
     params.update(kwargs)
     return HandModel(**params)

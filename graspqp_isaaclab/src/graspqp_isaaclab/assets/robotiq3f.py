@@ -25,7 +25,7 @@ ROBOTIQ_3F_ACTUATED_JOINT_NAMES = [
 ]
 
 
-ROBOTIQ_3F = HandModelCfg(
+ROBOTIQ_3F_CFG = HandModelCfg(
     spawn=sim_utils.UsdFileCfg(
         usd_path=os.path.join(
             os.path.dirname(__file__),

@@ -1,0 +1,18 @@
+{
+  "pinch": {
+    "egu_50_finger_down": {
+      "n_points": 8
+    },
+    "egu_50_finger_up": {
+      "n_points": 8
+    }
+  },
+  "full": {
+    "egu_50_finger_down": {
+      "n_points": 8
+    },
+    "egu_50_finger_up": {
+      "n_points": 8
+    }
+  }
+}

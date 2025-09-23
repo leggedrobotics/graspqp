@@ -6,10 +6,10 @@ WEIGHTS_PATH = os.path.join(
     file_dir,
     "../../../assets/robotiq2/robotiq2f_fk.pth",
 )
-global robotiq_2f140_model
-robotiq_2f140_model = None
+global ROBOTIQ_2F_CFG140_model
+ROBOTIQ_2F_CFG140_model = None
 
-robotiq_2f140_model_joint_names = [
+ROBOTIQ_2F_CFG140_model_joint_names = [
     "finger_joint",
     "left_inner_knuckle_joint",
     "right_inner_knuckle_joint",
@@ -31,18 +31,18 @@ def robotiq2f140_fk(driven_angle: torch.Tensor, joint_order=None) -> torch.Tenso
     """
     # hard clip driven_angle to limits
     driven_angle = torch.clamp(driven_angle, min=-0.05, max=0.8)
-    global robotiq_2f140_model
-    if robotiq_2f140_model is None:
-        robotiq_2f140_model = torch.load(WEIGHTS_PATH, weights_only=False)
-        robotiq_2f140_model.eval()
-    robotiq_2f140_model.to(driven_angle.device)
-    joints = torch.cat([driven_angle, robotiq_2f140_model(driven_angle)], dim=-1)
+    global ROBOTIQ_2F_CFG140_model
+    if ROBOTIQ_2F_CFG140_model is None:
+        ROBOTIQ_2F_CFG140_model = torch.load(WEIGHTS_PATH, weights_only=False)
+        ROBOTIQ_2F_CFG140_model.eval()
+    ROBOTIQ_2F_CFG140_model.to(driven_angle.device)
+    joints = torch.cat([driven_angle, ROBOTIQ_2F_CFG140_model(driven_angle)], dim=-1)
 
     if joint_order is not None:
         joint_order_idxs = []
         for joint_name in joint_order:
-            if joint_name in robotiq_2f140_model_joint_names:
-                joint_order_idxs.append(robotiq_2f140_model_joint_names.index(joint_name))
+            if joint_name in ROBOTIQ_2F_CFG140_model_joint_names:
+                joint_order_idxs.append(ROBOTIQ_2F_CFG140_model_joint_names.index(joint_name))
             else:
                 raise ValueError(f"Joint name {joint_name} not found in model.")
 

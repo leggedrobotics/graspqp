@@ -13,3 +13,7 @@ node_modules
 
 wandb
 _vis
+*.tar
+*.sif
+**/*.sif
+**/*.tar

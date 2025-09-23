@@ -22,7 +22,7 @@ def cal_joint_pos(joint_pos):
     return robotiq2f140_fk(joint_pos[:, [0]])
 
 
-ROBOTIQ_2F = HandModelCfg(
+ROBOTIQ_2F_CFG = HandModelCfg(
     spawn=sim_utils.UsdFileCfg(
         usd_path=os.path.join(
             os.path.dirname(__file__),
@@ -90,4 +90,4 @@ ROBOTIQ_2F = HandModelCfg(
     init_fnc=cal_joint_pos,
     hand_model_name="robotiq2f",
 )
-"""Configuration of Shadow Hand robot."""
+"""Configuration of Robotiq 2F robot."""

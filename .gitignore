@@ -219,3 +219,5 @@ outputs/
 checkpoints/
 docker/cuda-repo.deb
 docker/cuda-ubuntu2204.pin
+docker/cluster/exports/
+docker/cluster/exports

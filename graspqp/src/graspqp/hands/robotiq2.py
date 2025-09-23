@@ -7,25 +7,21 @@ from graspqp.utils.fk import robotiq2f140_fk
 
 
 def calculate_joints(joint_angles: torch.Tensor, hand_model: HandModel):
-    
-    fk_angles = robotiq2f140_fk(
-        joint_angles, joint_order=hand_model.joints_names
-    )
+
+    fk_angles = robotiq2f140_fk(joint_angles, joint_order=hand_model.joints_names)
 
     return hand_model.chain.forward_kinematics(fk_angles)
 
 
 def calculate_jacobian(joint_angles: torch.Tensor, hand_model):
-    joint_angles = robotiq2f140_fk(
-        joint_angles, joint_order=hand_model.joints_names
-    )
+    joint_angles = robotiq2f140_fk(joint_angles, joint_order=hand_model.joints_names)
     jacobian = hand_model.chain.jacobian(joint_angles)
     return (jacobian[..., 0] - jacobian[..., 3]).unsqueeze(-1)
 
 
 def getHandModel(device: str, asset_dir: str, **kwargs) -> HandModel:
     params = dict(
-        mjcf_path=f"{asset_dir}/robotiq2/robotiq_2f140.urdf",
+        mjcf_path=f"{asset_dir}/robotiq2/ROBOTIQ_2F_CFG140.urdf",
         mesh_path=f"{asset_dir}/robotiq2/meshes",
         contact_points_path=f"{asset_dir}/robotiq2/contact_points.json",
         penetration_points_path=f"{asset_dir}/robotiq2/penetration_points.json",

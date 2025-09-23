@@ -185,6 +185,7 @@ class HandModel:
                     visual.geom_param[0].endswith(".STL")
                     or visual.geom_param[0].endswith(".stl")
                     or visual.geom_param[0].endswith(".obj")
+                    or visual.geom_param[0].endswith(".dae"),
                 ):
                     visual.geom_param[0] = visual.geom_param[0] + ".STL"
                 if not os.path.exists(os.path.join(mesh_path, visual.geom_param[0])):
@@ -207,7 +208,7 @@ class HandModel:
             return link_mesh, scale
 
         def build_mesh_recurse(body):
-            if len(body.link.visuals) > 0:
+            if (len(body.link.visuals) > 0 and not only_use_collision) or len(body.link.collisions) > 0:
                 link_name = body.link.name
                 link_vertices = []
                 link_faces = []
@@ -607,6 +608,7 @@ class HandModel:
             [(link_name, int(areas[link_name] / total_area * n_surface_points)) for link_name in self.mesh]
         )
         num_samples[list(num_samples.keys())[0]] += n_surface_points - sum(num_samples.values())
+
         for link_name in self.mesh:
             if num_samples[link_name] == 0:
                 self.mesh[link_name]["surface_points"] = torch.tensor([], dtype=torch.float, device=device).reshape(
@@ -825,7 +827,6 @@ class HandModel:
                     contact_point_indices,
                     self.contact_point_indices,
                 )
-
             self.all_contact_points, self._all_contact_normals = self.get_contact_candidates(with_normals=True)
             self.contact_candidates = self.all_contact_points
 
@@ -1068,15 +1069,20 @@ class HandModel:
 
         for link_name in self.mesh:
             n_surface_points = self.mesh[link_name]["surface_points"].shape[0]
-            points.append(self.current_status[link_name].transform_points(self.mesh[link_name]["surface_points"]))
-            if batch_size != points[-1].shape[0]:
-                points[-1] = points[-1].expand(batch_size, n_surface_points, 3)
+            pts_transformed = self.current_status[link_name].transform_points(self.mesh[link_name]["surface_points"])
+            if pts_transformed.ndim == 2:
+                pts_transformed = pts_transformed.unsqueeze(0)
+            if batch_size != pts_transformed.shape[0]:
+                pts_transformed = pts_transformed.expand(batch_size, n_surface_points, 3)
+
+            points.append(pts_transformed)
         try:
             points = torch.cat(points, dim=-2).to(self.device)
         except:
             import pdb
 
             pdb.set_trace()
+
         points = points @ self.global_rotation.transpose(1, 2) + self.global_translation.unsqueeze(1)
         return points
 
@@ -1122,12 +1128,6 @@ class HandModel:
         return j_contact_lin
 
     def get_ee_vel(self, joint_vel, contact_point_indices):
-
-        # # convert with glocal rotation and translation
-        # # import pdb; pdb.set_trace()
-        # moving_directions = (self.global_rotation.mT.unsqueeze(1) @ moving_directions.unsqueeze(-1)).squeeze(-1)
-        # # moving_directions = self.global_rotation.mT @ moving_directions
-        # # moving_directions
 
         jacobian = self.jacobian(self.hand_pose[:, 9:])
         if contact_point_indices is None:
@@ -1233,52 +1233,6 @@ class HandModel:
             return theta_sol.squeeze(-1), residuals.squeeze(-1), ee_vel
         return theta_sol.squeeze(-1), residuals.squeeze(-1)
 
-        # cog = hand_model.mesh[link_name]["vertices"].mean(0, keepdim=True)*0
-        # cog = hand_model.current_status[link_name].transform_points(cog).cpu().squeeze(0).numpy()
-
-        # contacts_world_frame = hand_model.current_status[link_name].transform_points(contact_points)
-        # # draw coordinate system for each link, with respect to the cog
-        # axis = torch.tensor([[0.1, 0, 0], [0, 0.1, 0], [0, 0, 0.1]], device=device)
-        # axis = hand_model.current_status[link_name].transform_normals(axis)
-        # # axis = hand_model.current_status[link_name].transform_points(axis).cpu().numpy()
-        # axis = axis.cpu().numpy()
-        # # draw axis lines
-        # for i in range(3):
-        #     c = ['red', 'green', 'blue'][i]
-        #     end_pt = cog + axis[i]
-        #     x,y,z = [cog[0], end_pt[0]], [cog[1], end_pt[1]], [cog[2], end_pt[2]]
-        #     scatter = go.Scatter3d(x=x, y=y, z=z, mode='lines', line=dict(color=c), name=f'axis_{link_name}', legendgroup=f'axis_{link_name}')
-        #     data += [scatter]
-
-        # if "index" not in link_name:
-        #     continue
-
-        # # add line from 3d scatter in direction of jacobian
-        # for idx, (lin_vel, ang_vel) in enumerate(zip(linear_jacobian.T, angular_jacobian.T)):
-        #     if len(contact_points) == 0:
-        #         continue
-        #     if idx >= 4:
-        #         continue
-        #     # if np.abs(lin_vel.cpu().numpy()).max() < 1e-4:
-        #     #     continue
-        #     contact_points_f = hand_model.current_status[link_name].transform_normals(contact_points)
-        #     point_vel = torch.cross(ang_vel[None], contact_points_f) + lin_vel[None]
-        #     if point_vel.norm(dim=1).max() < 1e-3:
-        #         continue
-
-        #     for pt, vec in zip(contacts_world_frame, point_vel):
-        #         # pt = cog
-        #         pt = pt.cpu().numpy()
-        #         v = vec.cpu().numpy()
-        #         col = ["orange", "purple", "pink", "blue"][idx]
-        #         scatter = go.Scatter3d(x=[pt[0], pt[0]+v[0]], y=[pt[1], pt[1]+v[1]], z=[pt[2], pt[2]+v[2]], mode='lines', line=dict(color=col, width = 6), name=f'jacobian_{link_name}', legendgroup=f'jacobian_{link_name}')
-        #         data += [scatter]
-
-        # jacobian
-        import pdb
-
-        pdb.set_trace()
-
     def get_contact_candidates(self, with_normals=False):
         """
         Get all contact candidates
@@ -1313,7 +1267,13 @@ class HandModel:
             #     points[-1] = points[-1].expand(batch_size, n_surface_points, 3)
             #     if with_normals:
             #         normals[-1] = normals[-1].expand(batch_size, n_surface_points, 3)
-
+        if len(points) == 0:
+            if with_normals:
+                return (
+                    torch.zeros(batch_size, 0, 3, device=self.device),
+                    torch.zeros(batch_size, 0, 3, device=self.device),
+                )
+            return torch.zeros(batch_size, 0, 3, device=self.device)
         points = torch.cat(points, dim=-2).to(self.device)
         points = points @ self.global_rotation.transpose(1, 2) + self.global_translation.unsqueeze(1)
         if with_normals:

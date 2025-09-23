@@ -6,7 +6,7 @@
 ##
 # Pre-defined configs
 ##
-from graspqp_isaaclab.assets.robotiq2f import ROBOTIQ_2F
+from graspqp_isaaclab.assets.robotiq2f import ROBOTIQ_2F_CFG
 
 from graspqp_isaaclab.tasks.manipulation.grasp.config.object_mining_env import (
     ObjectGraspMiningEnvCfg,
@@ -28,18 +28,18 @@ class robotiq2fObjectGraspMiningEnvCfg(ObjectGraspMiningEnvCfg):
 
         # switch robot to franka
         self.scene.robot = HandModelCfg.from_articulation_cfg(
-            ROBOTIQ_2F.replace(prim_path="{ENV_REGEX_NS}/Robot"), hand_model_name="robotiq2"
+            ROBOTIQ_2F_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot"), hand_model_name="robotiq2"
         )
         # override actions
         self.actions.hand_action = mdp.JointPositionActionCfg(
             asset_name="robot",
-            joint_names=ROBOTIQ_2F.actuated_joints_expr,
+            joint_names=ROBOTIQ_2F_CFG.actuated_joints_expr,
             scale=1.0,
             use_default_offset=True,
             preserve_order=True,
             class_type=mdp.FixedJointPositionAction,  # Resets in isaacsim are broken
         )
         self.observations.joint_pos.joint_pos.params["asset_cfg"] = SceneEntityCfg(
-            name="robot", joint_names=ROBOTIQ_2F.actuated_joints_expr, preserve_order=True
+            name="robot", joint_names=ROBOTIQ_2F_CFG.actuated_joints_expr, preserve_order=True
         )
         # self.scene.hand_mesh_sensor = robotiq3f_MESH_TRACKER_CFG

@@ -41,7 +41,7 @@ log = [
     "wandb==0.21.3",
 ]
 full = [
-    "graspqp[viz,log,opt]",
+    "graspqp[viz,log,opt,third_party]",
 ]
 core = [
     "graspqp",

@@ -34,7 +34,7 @@ SHADOW_HAND_CFG = HandModelCfg(
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.5),
-        rot=(0.0, 0.0, -0.7071, 0.7071),
+        rot=(1.0, 0.0, 0.0, 0.0),
         joint_pos={".*": 0.0},
     ),
     actuators={
