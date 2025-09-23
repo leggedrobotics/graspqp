@@ -1,9 +1,9 @@
-from graspqp.core import HandModel
 import torch
 
-# ['finger_joint', 'left_inner_finger_joint', 'left_inner_knuckle_joint', 'right_outer_knuckle_joint', 'right_inner_finger_joint', 'right_inner_knuckle_joint']
-
+from graspqp.core import HandModel
 from graspqp.utils.fk import robotiq2f140_fk
+
+# ['finger_joint', 'left_inner_finger_joint', 'left_inner_knuckle_joint', 'right_outer_knuckle_joint', 'right_inner_finger_joint', 'right_inner_knuckle_joint']
 
 
 def calculate_joints(joint_angles: torch.Tensor, hand_model: HandModel):

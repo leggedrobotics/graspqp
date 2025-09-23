@@ -1,5 +1,6 @@
-from graspqp.core import HandModel
 import torch
+
+from graspqp.core import HandModel
 
 
 def getHandModel(device: str, asset_dir: str, **kwargs) -> HandModel:

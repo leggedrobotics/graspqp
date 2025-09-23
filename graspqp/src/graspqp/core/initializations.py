@@ -4,12 +4,12 @@ Author: Jialiang Zhang, Ruicheng Wang
 Description: initializations
 """
 
-import torch
-import transforms3d
-import pytorch3d.structures
 import pytorch3d.ops
-import trimesh as tm
+import pytorch3d.structures
+import torch
 import torch.nn.functional
+import transforms3d
+import trimesh as tm
 
 
 def initialize_convex_hull(hand_model, object_model, args, env_mask=None, energy_checker=None, init_contacts=True):
@@ -111,9 +111,7 @@ def initialize_convex_hull(hand_model, object_model, args, env_mask=None, energy
             # 4. Construct the batched 3x3 orientation matrices
             # Stack the right, up, and forward vectors into 3x3 matrices
             orientation_matrices = torch.stack([forward, up, right], dim=-1)
-            basis = torch.stack(
-                [forward_vector, -torch.cross(forward_vector, base_up_vector, dim=-1), base_up_vector], dim=-1
-            )
+            basis = torch.stack([forward_vector, -torch.cross(forward_vector, base_up_vector, dim=-1), base_up_vector], dim=-1)
 
             return orientation_matrices @ basis
 

@@ -4,5 +4,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from isaaclab.envs.mdp import *
-from .events import *
+
 from .actions import *
+from .events import *

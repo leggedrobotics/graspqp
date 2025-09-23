@@ -3,14 +3,14 @@ import os
 ASSET_DIR = os.path.join(os.path.dirname(__file__), "../../../assets")
 
 
-from .robotiq3 import getHandModel as getRobotiq3HandModel
-from .panda import getHandModel as getPandaHandModel
-from .allegro import getHandModel as getAllegroHandModel
 from .ability_hand import getHandModel as getAbilityHandModel
-from .shadow import getHandModel as getShadowHandModel
+from .allegro import getHandModel as getAllegroHandModel
+from .panda import getHandModel as getPandaHandModel
 from .robotiq2 import getHandModel as getRobotiq2HandModel
-from .xhand import getHandModel as getXHandModel
+from .robotiq3 import getHandModel as getRobotiq3HandModel
 from .schunk import getHandModel as getSchunkHandModel
+from .shadow import getHandModel as getShadowHandModel
+from .xhand import getHandModel as getXHandModel
 
 _REGISTRY = {
     "robotiq3": getRobotiq3HandModel,

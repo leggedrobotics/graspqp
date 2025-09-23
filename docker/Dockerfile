@@ -38,7 +38,7 @@ COPY ../ ${DOCKER_ISAACLAB_EXTENSION_TEMPLATE_PATH}
 RUN --mount=type=cache,target=/root/.cache/pip bash -i -c "source ${HOME}/.bashrc && \
     cd ${DOCKER_ISAACLAB_EXTENSION_TEMPLATE_PATH}/thirdparty/pytorch_kinematics && \
     pip install -e . && \
-    cd  ${DOCKER_ISAACLAB_EXTENSION_TEMPLATE_PATH}/thirdparty/TorchSDF && pip install -e . --no-build-isolation" 
+    cd  ${DOCKER_ISAACLAB_EXTENSION_TEMPLATE_PATH}/thirdparty/TorchSDF && pip install -e . --no-build-isolation"
 
 # Install GraspQP and GraspQP Isaac Lab
 RUN --mount=type=cache,target=/root/.cache/pip bash -i -c "source ${HOME}/.bashrc && \

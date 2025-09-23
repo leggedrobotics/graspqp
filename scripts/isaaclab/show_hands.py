@@ -32,25 +32,20 @@ simulation_app = app_launcher.app
 
 """Rest everything follows."""
 
+import isaaclab.sim as sim_utils
+import isaacsim.core.utils.prims as prim_utils
 import numpy as np
 import torch
-
-import isaacsim.core.utils.prims as prim_utils
-
-import isaaclab.sim as sim_utils
-from isaaclab.assets import Articulation
-
 ##
 # Pre-defined configs
 ##
 from graspqp_isaaclab.assets.allegro import ALLEGRO_HAND_CFG
-
-from graspqp_isaaclab.assets.robotiq2f import ROBOTIQ_2F_CFG
-from graspqp_isaaclab.assets.schunk2f import SCHUNK_2F_CFG
 from graspqp_isaaclab.assets.panda import PANDA_CFG
+from graspqp_isaaclab.assets.robotiq2f import ROBOTIQ_2F_CFG
 from graspqp_isaaclab.assets.robotiq3f import ROBOTIQ_3F_CFG
+from graspqp_isaaclab.assets.schunk2f import SCHUNK_2F_CFG
 from graspqp_isaaclab.assets.shadow_hand import SHADOW_HAND_CFG
-
+from isaaclab.assets import Articulation
 
 AVAILABLE_HANDS = {
     "allegro": ALLEGRO_HAND_CFG,

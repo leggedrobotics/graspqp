@@ -1,19 +1,16 @@
-from graspqp.metrics.ops.span import OverallFrictionConeSpanMetric
-import torch
 import pytest
+import torch
+
+from graspqp.metrics.ops.span import OverallFrictionConeSpanMetric
 
 
 def test_cpu():
-    metric = OverallFrictionConeSpanMetric.from_dim(
-        num_wrenches=12, wrench_dim=6, device="cpu"
-    )
+    metric = OverallFrictionConeSpanMetric.from_dim(num_wrenches=12, wrench_dim=6, device="cpu")
 
     batch_size = 16
     contact_pts = torch.rand(batch_size, 12, 3)
     contact_normals = torch.rand(batch_size, 12, 3)
-    contact_normals = contact_normals / torch.norm(
-        contact_normals, dim=-1, keepdim=True
-    )
+    contact_normals = contact_normals / torch.norm(contact_normals, dim=-1, keepdim=True)
     cog = torch.zeros(batch_size, 3)
 
     metric(contact_pts, contact_normals, cog=cog)
@@ -25,9 +22,7 @@ def test_gpu():
     batch_size = 16
     contact_pts = torch.rand(batch_size, 12, 3)
     contact_normals = torch.rand(batch_size, 12, 3)
-    contact_normals = contact_normals / torch.norm(
-        contact_normals, dim=-1, keepdim=True
-    )
+    contact_normals = contact_normals / torch.norm(contact_normals, dim=-1, keepdim=True)
     cog = torch.zeros(batch_size, 3)
 
     metric = metric.to("cuda")

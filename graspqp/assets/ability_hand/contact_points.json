@@ -10,6 +10,6 @@
     "pinky_L2": [["../../ability_hand/urdf_meshes/contact_l2.obj", 8]],
     "thumb_L1": [],
     "thumb_L2": [["../../ability_hand/urdf_meshes/contact_thumb_l2.obj", 16]],
-    "wrist_connector": [], 
+    "wrist_connector": [],
     "connector_plate": []
  }

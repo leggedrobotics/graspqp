@@ -1,5 +1,6 @@
 import wandb
 
+
 class WandbMockup:
     def __init__(self, enabled=True):
         self.enabled = enabled
@@ -15,7 +16,7 @@ class WandbMockup:
     def init(self, *args, **kwargs):
         if self.enabled:
             wandb.init(*args, **kwargs)
-        
+
     def Plotly(self, *args, **kwargs):
         if self.enabled:
             return wandb.Plotly(*args, **kwargs)

@@ -1,5 +1,6 @@
-import torch
 import math
+
+import torch
 
 from graspqp.metrics.solver.qp_solver import SQPLsqSolver as LsqSolver
 
@@ -214,7 +215,14 @@ class EucledianGraspSpanMetric(GraspSpanMetric):
 
     def _get_basis_vectors(self, F: torch.Tensor):
         if self._basis_vectors is None:
-            self._basis_vectors = torch.cat([torch.eye(F.shape[-2]), -torch.eye(F.shape[-2])]).to(F.device).unsqueeze(0).expand(1, -1, -1).contiguous().clone()
+            self._basis_vectors = (
+                torch.cat([torch.eye(F.shape[-2]), -torch.eye(F.shape[-2])])
+                .to(F.device)
+                .unsqueeze(0)
+                .expand(1, -1, -1)
+                .contiguous()
+                .clone()
+            )
 
         if self._basis_vectors.shape[0] != F.shape[0]:
             return self._basis_vectors.expand(F.shape[0], -1, -1).contiguous()
@@ -260,7 +268,9 @@ class EucledianFrictionConeSpanMetric(EucledianGraspSpanMetric):
             tangential_basis.append(-self._mu * v_t + math.sqrt(1 - self._mu**2) * normals)
         else:
             # first basis vector
-            b1 = torch.tensor([1, 1, 1], device=normals.device).view(1, 1, 3).expand(normals.shape[0], normals.shape[1], 3) / math.sqrt(3)
+            b1 = torch.tensor([1, 1, 1], device=normals.device).view(1, 1, 3).expand(
+                normals.shape[0], normals.shape[1], 3
+            ) / math.sqrt(3)
             # check b1 too close to normals
 
             dot_product = torch.sum(b1 * normals, dim=-1) * 1 / (normals.norm(dim=-1) + 1e-6)

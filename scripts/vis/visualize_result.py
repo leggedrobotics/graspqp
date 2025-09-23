@@ -1,24 +1,20 @@
 """ """
 
-import os
-
-import numpy as np
-import torch
-import plotly.graph_objects as go
-
-from graspqp.hands import get_hand_model, AVAILABLE_HANDS
-from graspqp.core import ObjectModel
-from graspqp.core.energy import calculate_energy
-
 import argparse
 import glob
-
-import roma
-
+import os
 from dataclasses import dataclass
 from typing import List, Optional, Sequence, Union
+
 import numpy as np
+import plotly.graph_objects as go
 import plotly.io as pio
+import roma
+import torch
+
+from graspqp.core import ObjectModel
+from graspqp.core.energy import calculate_energy
+from graspqp.hands import AVAILABLE_HANDS, get_hand_model
 
 pio.renderers.default = "browser"
 
@@ -28,18 +24,8 @@ try:
 except Exception:
     go = None  # type: ignore
 
-from pygltflib import (
-    GLTF2,
-    Scene,
-    Node,
-    Mesh,
-    Buffer,
-    BufferView,
-    Accessor,
-    Asset,
-    Primitive,
-    Material,
-)
+from pygltflib import (GLTF2, Accessor, Asset, Buffer, BufferView, Material,
+                       Mesh, Node, Primitive, Scene)
 
 try:
     # Newer naming in some releases
@@ -833,8 +819,7 @@ def _show_dir(dir, args, device, origin=(0, 0)):
 
                 motion_start = cog_links_w.cpu().numpy()[0]
                 motion_end = (
-                    motion_start
-                    + (linear_jacobian[None] @ hand_model.global_rotation[env_id].transpose(0, 1)).cpu().numpy()[0]
+                    motion_start + (linear_jacobian[None] @ hand_model.global_rotation[env_id].transpose(0, 1)).cpu().numpy()[0]
                 )
                 # draw the line
                 data.append(
@@ -877,9 +862,7 @@ def _show_dir(dir, args, device, origin=(0, 0)):
 
                 import matplotlib.cm as cm
 
-                color = cm.viridis(
-                    (energy[env_id] - energy.min()).cpu().numpy() / (energy.max() - energy.min()).cpu().numpy()
-                )
+                color = cm.viridis((energy[env_id] - energy.min()).cpu().numpy() / (energy.max() - energy.min()).cpu().numpy())
                 color_rgb_str = f"rgb({int(color[0]*255)},{int(color[1]*255)},{int(color[2]*255)})"
                 text = f"{energy_name}: {energy[env_id]:.2f}"
                 spacing = 0.04
@@ -924,9 +907,7 @@ def _show_dir(dir, args, device, origin=(0, 0)):
 
                     coef = cache["results"][-1][env_id].cpu().numpy().squeeze()
                     r_contact = (
-                        cache["r_cog_contact"][env_id].cpu().numpy()
-                        + offset
-                        + object_model.cog[env_id].detach().cpu().numpy()
+                        cache["r_cog_contact"][env_id].cpu().numpy() + offset + object_model.cog[env_id].detach().cpu().numpy()
                     )
 
                     r_end = r_contact + linear_forces  # * (coef - 1)[:, None] * 0.05
@@ -1034,9 +1015,7 @@ def _show_dir(dir, args, device, origin=(0, 0)):
 
                 elif energy_name == "span_eucledian_scipy" and SHOW_EUCLEDIAN:
                     cache = energy_fnc.metric._cache
-                    basis = cache[
-                        "basis"
-                    ]  # Direction of the 12 basis vectors. First 6 are for forces, last 6 are for moments
+                    basis = cache["basis"]  # Direction of the 12 basis vectors. First 6 are for forces, last 6 are for moments
 
                     basis_force = torch.cat([basis[env_id, :3, :3], basis[env_id, 6:9, :3]], dim=0).cpu().numpy()
                     basis_moment = torch.cat([basis[env_id, 3:6, 3:], basis[env_id, 9:, 3:]], dim=0).cpu().numpy()

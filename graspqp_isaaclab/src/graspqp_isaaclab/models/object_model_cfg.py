@@ -1,8 +1,7 @@
 from isaaclab.assets.rigid_object import RigidObjectCfg
+from isaaclab.utils import configclass
 
 from .object_model import RigidObjectModel
-
-from isaaclab.utils import configclass
 
 
 @configclass

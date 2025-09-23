@@ -8,12 +8,12 @@
 """Launch Isaac Sim Simulator first."""
 
 import argparse
-from isaaclab.app import AppLauncher
 import os
-import wandb
 
-from tensordict import TensorDict
+import wandb
 from graspqp_isaaclab.parser_utils import add_default_args, parse_args
+from isaaclab.app import AppLauncher
+from tensordict import TensorDict
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Random agent for Isaac Lab environments.")
@@ -41,8 +41,9 @@ simulation_app = app_launcher.app
 
 # fix all seeds
 import random
-import torch
+
 import numpy as np
+import torch
 
 if args_cli.log_to_wandb:
     print("logging to wandb")
@@ -55,21 +56,17 @@ torch.manual_seed(seed)
 
 
 """Rest everything follows."""
-from graspqp_isaaclab.env_registry import get_env_cfg
-
-import gymnasium as gym
-import isaaclab.sim as sim_utils
-
-# from isaaclab.ui.components.component import Component
-
-
 import os
 
-from isaaclab_rl.rsl_rl import RslRlVecEnvWrapper
-from graspqp_isaaclab.utils.data import resolve_assets
-from graspqp_isaaclab.agents.static import StaticGraspAgent
+import gymnasium as gym
 from graspqp_isaaclab.agents.eval import AgentEvalWrapper
 from graspqp_isaaclab.agents.multi_agent import MultiAgentWrapper
+from graspqp_isaaclab.agents.static import StaticGraspAgent
+from graspqp_isaaclab.env_registry import get_env_cfg
+from graspqp_isaaclab.utils.data import resolve_assets
+from isaaclab_rl.rsl_rl import RslRlVecEnvWrapper
+
+# from isaaclab.ui.components.component import Component
 
 
 print("========================================")

@@ -1,29 +1,25 @@
 from __future__ import annotations
 
-import torch
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
+import isaaclab.sim as sim_utils
+import torch
+from isaaclab.assets.rigid_object import RigidObject
 from pxr import UsdPhysics
 
-import isaaclab.sim as sim_utils
-
-from isaaclab.assets.rigid_object import RigidObject
 from .object_model_data import RigidObjectModelData
 
 if TYPE_CHECKING:
     from .object_model_cfg import RigidObjectModelCfg
 
 import weakref
-
 from typing import TYPE_CHECKING, ClassVar
 
 import carb
-import warp as wp
-
-from graspqp_isaaclab.utils.warp import convert_to_warp_mesh
-
 import numpy as np
+import warp as wp
+from graspqp_isaaclab.utils.warp import convert_to_warp_mesh
 
 # from graspqp_isaaclab.utils.warp import mesh as wp_mesh
 
@@ -155,9 +151,7 @@ class RigidObjectModel(RigidObject):
         for path_idx, path in enumerate(paths):
 
             # check if the prim is a primitive object - handle these as special types
-            mesh_prim = sim_utils.get_first_matching_child_prim(
-                path, lambda prim: prim.GetTypeName() in PRIMITIVE_MESH_TYPES
-            )
+            mesh_prim = sim_utils.get_first_matching_child_prim(path, lambda prim: prim.GetTypeName() in PRIMITIVE_MESH_TYPES)
 
             if mesh_prim is None:
                 # obtain the mesh prim
@@ -170,9 +164,7 @@ class RigidObjectModel(RigidObject):
                 points *= np.array(sim_utils.resolve_world_scale(mesh_prim))
                 if str(RigidObjectModel.mesh_views[prim_path].prim_paths[path_idx]) != str(mesh_prim.GetPath()):
                     # find relative path
-                    parent_prim = sim_utils.find_matching_prims(
-                        RigidObjectModel.mesh_views[prim_path].prim_paths[path_idx]
-                    )[0]
+                    parent_prim = sim_utils.find_matching_prims(RigidObjectModel.mesh_views[prim_path].prim_paths[path_idx])[0]
                     # pos, orientation = sim_utils.get_relative_chain_pose_from_usd(mesh_prim, parent_prim)
                     # RigidObjectModel.local_tfs[prim_path] = torch.cat([pos, orientation], dim=-1)
                     # points = (
@@ -185,9 +177,7 @@ class RigidObjectModel(RigidObject):
                     #     .numpy()
                     # )
                     wp_mesh = convert_to_warp_mesh(points, faces, device=self.device)
-                    carb.log_info(
-                        f"Read mesh prim: {mesh_prim.GetPath()} with {len(points)} vertices and {len(faces)} faces."
-                    )
+                    carb.log_info(f"Read mesh prim: {mesh_prim.GetPath()} with {len(points)} vertices and {len(faces)} faces.")
                 else:
                     wp_mesh = convert_to_warp_mesh(points, faces, device=self.device)
                     carb.log_info(f"Created {mesh_prim.GetTypeName()} mesh prim: {mesh_prim.GetPath()}.")

@@ -87,12 +87,12 @@
 
         <!-- <div class="caption">
              <strong>Grasp Configurations</strong>: <span class="mono" id="capHand">{handtype}</span>
-            on <span class="mono" id="capObject">{object}</span> 
+            on <span class="mono" id="capObject">{object}</span>
             </div> -->
       </div>
-      
-          
-         
+
+
+
       <div class="body">
 
           <p>
@@ -201,7 +201,7 @@
     createScene();
 
     // UI controls
-    // $('#lightIntensity').addEventListener('input', e => light.intensity = parseFloat(e.target.value)); 
+    // $('#lightIntensity').addEventListener('input', e => light.intensity = parseFloat(e.target.value));
     $('#toggleGround').addEventListener('change', e => { if (ground) ground.isVisible = e.target.checked; });
     $('#toggleWire').addEventListener('change', e => { scene.meshes.forEach(m => { if (m.material) m.material.wireframe = e.target.checked; }); });
     $('#toggleOrbit').addEventListener('change', e => { orbitEnabled = e.target.checked; });
@@ -242,7 +242,7 @@
       const handTypes = Object.keys(catalogData).sort();
       for (const handType of handTypes){
         const opt = document.createElement('option');
-        opt.value = handType; 
+        opt.value = handType;
         opt.textContent = handType;
         handTypeSelect.appendChild(opt);
       }
@@ -297,9 +297,9 @@
       const savedObjectType = objectTypeSelect.value;
 
       objectTypeSelect.innerHTML = '<option disabled>— Select object type —</option>';
-      if (!handType || !graspType || !catalogData[handType] || !catalogData[handType][graspType]) { 
-        updateCaption(); 
-        return; 
+      if (!handType || !graspType || !catalogData[handType] || !catalogData[handType][graspType]) {
+        updateCaption();
+        return;
       }
 
       const objectTypes = Object.keys(catalogData[handType][graspType]);
@@ -390,9 +390,9 @@
       const graspType = graspTypeSelect.value;
       const objectType = objectTypeSelect.value;
 
-      if (!handType || !graspType || !objectType) { 
-        alert('Please select hand type, grasp type, and object type.'); 
-        return; 
+      if (!handType || !graspType || !objectType) {
+        alert('Please select hand type, grasp type, and object type.');
+        return;
       }
 
       const handData = catalogData[handType];
@@ -414,17 +414,17 @@
       try{
         console.log(`Loading Draco-compressed GLB: ${url}`);
         const container = await BABYLON.SceneLoader.LoadAssetContainerAsync('', url, scene);
-        container.addAllToScene(); 
-        importedContainer = container; 
+        container.addAllToScene();
+        importedContainer = container;
         fitCameraToMeshes(container.meshes);
         updateCaption();
         console.log(`Successfully loaded Draco GLB: ${handType} + ${objectType} (${selectedObjectId})`);
-      }catch(err){ 
-        console.error('Failed to load Draco GLB', url, err); 
+      }catch(err){
+        console.error('Failed to load Draco GLB', url, err);
         if (err.message && err.message.includes('draco')) {
           alert('Failed to decode Draco-compressed model. Please ensure the GLB file is properly encoded with Draco compression.');
         } else {
-          alert('Failed to load model: '+url+' — if viewing via file://, run a simple HTTP server to allow fetch.'); 
+          alert('Failed to load model: '+url+' — if viewing via file://, run a simple HTTP server to allow fetch.');
         }
       }
     }
@@ -436,12 +436,12 @@
     let orbitEnabled = true;
 
     // Render loop with camera animation
-    engine.runRenderLoop(() => { 
+    engine.runRenderLoop(() => {
       if (scene) {
         if (orbitEnabled && camera && camera.alpha !== undefined) {
           camera.alpha += orbitSpeed;
         }
-        scene.render(); 
+        scene.render();
       }
     });
     window.addEventListener('resize', () => engine.resize());

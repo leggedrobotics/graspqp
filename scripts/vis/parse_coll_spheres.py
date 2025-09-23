@@ -1,5 +1,6 @@
 import json
-data = json.load(open('/home/zrene/git/DexGraspNet/graspqp/assets/ability_hand/penetration_points.json'))
+
+data = json.load(open("/home/zrene/git/DexGraspNet/graspqp/assets/ability_hand/penetration_points.json"))
 link_mapping = {
     # "index_link_1": "index_link_1/contact",
     # "index_link_2": "index_link_2/contact",
@@ -19,18 +20,18 @@ configs = []
 for entry in data:
     link_name = link_mapping.get(entry, entry)
     value = data[entry]
-    
+
     spheres_cfg = []
-    
+
     for sphere in value:
         if len(sphere) == 4:
-            x,y,z,r = sphere
+            x, y, z, r = sphere
         else:
-            x,y,z = sphere
-            r = 0.01 # default radius
+            x, y, z = sphere
+            r = 0.01  # default radius
         config = f"""MeshTrackerCfg.MeshTargetCfg.CollSphereCfg(radius={r:.3f}, pos=[{x:.3f}, {y:.3f}, {z:.3f}])"""
         spheres_cfg.append(config)
-        
+
     config_entry = f"""
     MeshTrackerCfg.MeshTargetCfg(
         target_prim_expr="/World/envs/env_.*/Robot/{link_name}/contact",
@@ -42,5 +43,5 @@ for entry in data:
         ],
     )"""
     configs.append(config_entry)
-    
+
 print(",".join(configs))

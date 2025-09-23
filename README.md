@@ -1,6 +1,13 @@
 # GraspQP: Differentiable Optimization of Force Closure for Diverse and Robust Dexterous Grasping
 
 <p align="center">
+  <a href="https://arxiv.org/abs/2508.15002"><img src="https://img.shields.io/badge/arXiv-2508.15002-b31b1b.svg" alt="arXiv"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT"></a>
+  <img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg" alt="Python 3.10+">
+  <img src="https://img.shields.io/badge/CUDA-12.x-brightgreen.svg" alt="CUDA 12.x">
+</p>
+
+<p align="center">
   <a href="https://graspqp.github.io/">Project Page</a> •
   <a href="https://arxiv.org/abs/2508.15002">Paper (arXiv)</a>
 </p>
@@ -195,7 +202,7 @@ We thank the community for open-source components that enabled this work (e.g., 
 
 ## License
 
-MIT
+This project is licensed under the terms of the [MIT License](./LICENSE).
 
 ## Contact
 

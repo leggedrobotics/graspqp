@@ -1,30 +1,26 @@
 from __future__ import annotations
 
-import torch
 from typing import TYPE_CHECKING, Sequence
 
+import isaaclab.sim as sim_utils
 import omni.log
+import torch
+from isaaclab.assets.articulation import Articulation
 from pxr import UsdPhysics
 
-import isaaclab.sim as sim_utils
-
-from isaaclab.assets.articulation import Articulation
 from .hand_model_data import HandModelData
 
 if TYPE_CHECKING:
     from .hand_model_cfg import HandModelCfg
 
+import re
 import weakref
-
-import torch
 from typing import TYPE_CHECKING, ClassVar
 
-import warp as wp
-import re
-
 import isaaclab.sim as sim_utils
-
+import torch
 import warp as wp
+
 from graspqp.hands import get_hand_model
 
 try:
@@ -33,8 +29,8 @@ except ImportError:
     pass
 
 from typing import TYPE_CHECKING, ClassVar
-import warp as wp
 
+import warp as wp
 from graspqp_isaaclab.utils.utils import ortho_6_from_quat
 
 
@@ -101,9 +97,7 @@ class HandModel(Articulation):
 
         for joint_name in self._data.joint_names:
             try:
-                self._data.urdf_to_isaac_sim_joint_mapping.append(
-                    self._data.hand_model.actuated_joints_names.index(joint_name)
-                )
+                self._data.urdf_to_isaac_sim_joint_mapping.append(self._data.hand_model.actuated_joints_names.index(joint_name))
             except ValueError:
                 pass
 
@@ -290,9 +284,7 @@ class HandModel(Articulation):
         # convert everything to tensors
         self._data.actuated_joint_indices = torch.tensor(self._data.actuated_joint_indices, device=self.device)
         self._data.mimic_joint_indices = torch.tensor(self._data.mimic_joint_indices, device=self.device)
-        self._data.mimic_joint_parents_indices = torch.tensor(
-            self._data.mimic_joint_parents_indices, device=self.device
-        )
+        self._data.mimic_joint_parents_indices = torch.tensor(self._data.mimic_joint_parents_indices, device=self.device)
 
     # def write_joint_position_to_sim(
     #     self,

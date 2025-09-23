@@ -2,12 +2,15 @@
 Agent evaluation wrapper for grasp quality assessment and statistics collection.
 """
 
-import torch
-import time
 import os
+import time
+
+import torch
+from graspqp_isaaclab.utils.eval import (RunningStatistics,
+                                         calc_entropy_for_grasps,
+                                         calc_unique_grasps)
 
 from .base import Agent
-from graspqp_isaaclab.utils.eval import RunningStatistics, calc_entropy_for_grasps, calc_unique_grasps
 
 
 class AgentEvalWrapper(Agent):
@@ -138,9 +141,7 @@ class AgentEvalWrapper(Agent):
         self._results.append(~torch.stack(fails, -1)[..., :3])
 
         self._statistics.update(envs, (~torch.stack(fails, -1)[..., :3]).any(dim=-1))
-        self._statistics.update_info(
-            envs, x_axis=succ_per_axis[:, 0], y_axis=succ_per_axis[:, 1], z_axis=succ_per_axis[:, 2]
-        )
+        self._statistics.update_info(envs, x_axis=succ_per_axis[:, 0], y_axis=succ_per_axis[:, 1], z_axis=succ_per_axis[:, 2])
         self._statistics.update_info(envs, all_axis=succ_per_axis.all(dim=-1))
 
         # observations = torch.cat(self.observations, -1)
@@ -154,9 +155,7 @@ class AgentEvalWrapper(Agent):
             for agent in self._agent._agents:
                 env_ids = agent._env_ids
 
-                non_failing_envs = self._statistics.sucesses[env_ids] >= 0.5 * self._statistics.trials[env_ids].clamp(
-                    min=1
-                )
+                non_failing_envs = self._statistics.sucesses[env_ids] >= 0.5 * self._statistics.trials[env_ids].clamp(min=1)
 
                 joint_positions = agent._joint_positions
                 hand_poses = agent._hand_poses

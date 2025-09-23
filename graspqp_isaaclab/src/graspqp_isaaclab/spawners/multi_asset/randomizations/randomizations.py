@@ -11,10 +11,9 @@ import random
 from typing import TYPE_CHECKING
 
 import carb
+import isaaclab.sim as sim_utils
 import isaacsim.core.utils.prims as prim_utils
 from pxr import Usd
-
-import isaaclab.sim as sim_utils
 
 if TYPE_CHECKING:
     from .randomizations_cfg import RandomizeJointOffsetsCfg, RandomizeScaleCfg

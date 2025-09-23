@@ -2,17 +2,18 @@
 Based on Dexgraspnet: https://pku-epic.github.io/DexGraspNet/
 """
 
+import argparse
 import os
 
 import numpy as np
-import torch
-import trimesh as tm
-import transforms3d
-import plotly.graph_objects as go
-from graspqp.hands import get_hand_model, AVAILABLE_HANDS
 import open3d as o3d
-import argparse
+import plotly.graph_objects as go
 import plotly.io as pio
+import torch
+import transforms3d
+import trimesh as tm
+
+from graspqp.hands import AVAILABLE_HANDS, get_hand_model
 
 pio.renderers.default = "browser"
 
@@ -23,7 +24,9 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
 if __name__ == "__main__":
     arg_parser = argparse.ArgumentParser(description="Visualize hand model")
     arg_parser.add_argument("--device", type=str, default="cuda", help="device to run the model")
-    arg_parser.add_argument("--hand_name", type=str, default="robotiq3", help="name of the hand model", choices=AVAILABLE_HANDS + ["all"])
+    arg_parser.add_argument(
+        "--hand_name", type=str, default="robotiq3", help="name of the hand model", choices=AVAILABLE_HANDS + ["all"]
+    )
     arg_parser.add_argument("--show_jacobian", action="store_true", help="show jacobian")
     arg_parser.add_argument("--show_joint_axes", action="store_true", help="show joint axes")
     arg_parser.add_argument("--show_penetration_points", action="store_true", help="show penetration points")
@@ -46,11 +49,26 @@ if __name__ == "__main__":
 
         joint_angles = hand_model.default_state
         if args.randomize_joints:
-            joint_angles = torch.rand_like(hand_model.joints_lower) * (hand_model.joints_upper - hand_model.joints_lower) + hand_model.joints_lower
+            joint_angles = (
+                torch.rand_like(hand_model.joints_lower) * (hand_model.joints_upper - hand_model.joints_lower)
+                + hand_model.joints_lower
+            )
 
-        rotation = torch.tensor(transforms3d.euler.euler2mat(0.0, -np.pi / 3 * 0, 0, axes="rzxz"), dtype=torch.float, device=device)
+        rotation = torch.tensor(
+            transforms3d.euler.euler2mat(0.0, -np.pi / 3 * 0, 0, axes="rzxz"), dtype=torch.float, device=device
+        )
 
-        hand_pose = torch.cat([torch.tensor([idx * args.spacing, 0.0, 0.0], dtype=torch.float, device=device), rotation.T.ravel()[:6], joint_angles]).clone().detach()
+        hand_pose = (
+            torch.cat(
+                [
+                    torch.tensor([idx * args.spacing, 0.0, 0.0], dtype=torch.float, device=device),
+                    rotation.T.ravel()[:6],
+                    joint_angles,
+                ]
+            )
+            .clone()
+            .detach()
+        )
         hand_pose.grad = None
         hand_pose.requires_grad = True
         hand_model.set_parameters(hand_pose.unsqueeze(0), contact_point_indices="all")
@@ -60,15 +78,39 @@ if __name__ == "__main__":
         contact_candidates = hand_model.get_contact_candidates()[0].detach().cpu().numpy()
         penetration_keypoints = hand_model.get_penetraion_keypoints()[0].detach().cpu().numpy()
 
-        hand_plotly = hand_model.get_plotly_data(i=0, opacity=0.8, color="lightblue", with_contact_points=True, with_penetration_points=False, simplify=False)
+        hand_plotly = hand_model.get_plotly_data(
+            i=0, opacity=0.8, color="lightblue", with_contact_points=True, with_penetration_points=False, simplify=False
+        )
 
-        x_axis = go.Scatter3d(x=[idx * args.spacing, idx * args.spacing + 0.1], y=[0, 0], z=[0, 0], mode="lines", line=dict(color="red", width=5))
-        y_axis = go.Scatter3d(x=[idx * args.spacing, idx * args.spacing], y=[0, 0.1], z=[0, 0], mode="lines", line=dict(color="green", width=5))
-        z_axis = go.Scatter3d(x=[idx * args.spacing, idx * args.spacing], y=[0, 0], z=[0, 0.1], mode="lines", line=dict(color="blue", width=5))
+        x_axis = go.Scatter3d(
+            x=[idx * args.spacing, idx * args.spacing + 0.1], y=[0, 0], z=[0, 0], mode="lines", line=dict(color="red", width=5)
+        )
+        y_axis = go.Scatter3d(
+            x=[idx * args.spacing, idx * args.spacing], y=[0, 0.1], z=[0, 0], mode="lines", line=dict(color="green", width=5)
+        )
+        z_axis = go.Scatter3d(
+            x=[idx * args.spacing, idx * args.spacing], y=[0, 0], z=[0, 0.1], mode="lines", line=dict(color="blue", width=5)
+        )
 
         coordinate_system = [x_axis, y_axis, z_axis]
-        surface_points_plotly = [go.Scatter3d(x=surface_points[:, 0], y=surface_points[:, 1], z=surface_points[:, 2], mode="markers", marker=dict(color="yellow", size=2))]
-        contact_candidates_plotly = [go.Scatter3d(x=contact_candidates[:, 0], y=contact_candidates[:, 1], z=contact_candidates[:, 2], mode="markers", marker=dict(color="green", size=5))]
+        surface_points_plotly = [
+            go.Scatter3d(
+                x=surface_points[:, 0],
+                y=surface_points[:, 1],
+                z=surface_points[:, 2],
+                mode="markers",
+                marker=dict(color="yellow", size=2),
+            )
+        ]
+        contact_candidates_plotly = [
+            go.Scatter3d(
+                x=contact_candidates[:, 0],
+                y=contact_candidates[:, 1],
+                z=contact_candidates[:, 2],
+                mode="markers",
+                marker=dict(color="green", size=5),
+            )
+        ]
         # calc contact normals
 
         if args.show_penetration_points:
@@ -77,7 +119,9 @@ if __name__ == "__main__":
                 mesh = tm.primitives.Sphere(radius=scale)
                 v = mesh.vertices + penetration_keypoint
                 f = mesh.faces
-                data += [go.Mesh3d(x=v[:, 0], y=v[:, 1], z=v[:, 2], i=f[:, 0], j=f[:, 1], k=f[:, 2], color="burlywood", opacity=0.5)]
+                data += [
+                    go.Mesh3d(x=v[:, 0], y=v[:, 1], z=v[:, 2], i=f[:, 0], j=f[:, 1], k=f[:, 2], color="burlywood", opacity=0.5)
+                ]
 
         if args.show_jacobian:
             J = hand_model.jacobian(joint_angles)
@@ -111,7 +155,15 @@ if __name__ == "__main__":
                     c = ["red", "green", "blue"][i]
                     end_pt = cog + axis[i]
                     x, y, z = [cog[0], end_pt[0]], [cog[1], end_pt[1]], [cog[2], end_pt[2]]
-                    scatter = go.Scatter3d(x=x, y=y, z=z, mode="lines", line=dict(color=c), name=f"axis_{link_name}", legendgroup=f"axis_{link_name}")
+                    scatter = go.Scatter3d(
+                        x=x,
+                        y=y,
+                        z=z,
+                        mode="lines",
+                        line=dict(color=c),
+                        name=f"axis_{link_name}",
+                        legendgroup=f"axis_{link_name}",
+                    )
                     data += [scatter]
 
                 # add line from 3d scatter in direction of jacobian
@@ -129,7 +181,15 @@ if __name__ == "__main__":
                         pt = pt.detach().cpu().numpy()
                         v = vec.detach().cpu().numpy()
                         col = ["orange", "purple", "pink", "blue"][idx % 4]
-                        scatter = go.Scatter3d(x=[pt[0], pt[0] + v[0]], y=[pt[1], pt[1] + v[1]], z=[pt[2], pt[2] + v[2]], mode="lines", line=dict(color=col, width=6), name=f"jacobian_{link_name}", legendgroup=f"jacobian_{link_name}")
+                        scatter = go.Scatter3d(
+                            x=[pt[0], pt[0] + v[0]],
+                            y=[pt[1], pt[1] + v[1]],
+                            z=[pt[2], pt[2] + v[2]],
+                            mode="lines",
+                            line=dict(color=col, width=6),
+                            name=f"jacobian_{link_name}",
+                            legendgroup=f"jacobian_{link_name}",
+                        )
                         data += [scatter]
 
         if args.show_occupancy_grid:
@@ -161,9 +221,19 @@ if __name__ == "__main__":
             # pts = pts[pts_distances[0] > -10]
             # pts_distances[pts_distances <= 0] = -0.5
             # pts_distances[pts_distances > 0] = 0.5
-            colors = ((pts_distances - pts_distances.min()) / (pts_distances.max() - pts_distances.min() + 1e-6) * 100).squeeze()
+            colors = (
+                (pts_distances - pts_distances.min()) / (pts_distances.max() - pts_distances.min() + 1e-6) * 100
+            ).squeeze()
             pts = pts.detach().cpu().numpy()
-            data += [go.Scatter3d(x=pts[:, 0], y=pts[:, 1], z=pts[:, 2], mode="markers", marker=dict(size=5, color=colors, colorscale="RdBu", opacity=1.0))]
+            data += [
+                go.Scatter3d(
+                    x=pts[:, 0],
+                    y=pts[:, 1],
+                    z=pts[:, 2],
+                    mode="markers",
+                    marker=dict(size=5, color=colors, colorscale="RdBu", opacity=1.0),
+                )
+            ]
         data = hand_plotly + surface_points_plotly + contact_candidates_plotly + coordinate_system + data
 
     fig = go.Figure(data)

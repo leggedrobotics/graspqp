@@ -3,15 +3,11 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-from graspqp_isaaclab.tasks.manipulation.grasp.grasp_mining_env import (
-    GraspEnvCfg as GraspMiningEnvCfg,
-)
-from isaaclab.utils import configclass
-
 import isaaclab.sim as sim_utils
-
-
 from graspqp_isaaclab.models.object_model_cfg import RigidObjectModelCfg
+from graspqp_isaaclab.tasks.manipulation.grasp.grasp_mining_env import \
+    GraspEnvCfg as GraspMiningEnvCfg
+from isaaclab.utils import configclass
 
 
 @configclass

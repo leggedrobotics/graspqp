@@ -8,7 +8,6 @@ Collision handling functions and kernels.
 """
 
 import torch
-
 import warp as wp
 
 
@@ -136,8 +135,12 @@ def calc_sdf_field_batched(
         closest = wp.mesh_eval_position(object_meshes[env_idx, tid_obj_mesh_id], face_index, face_u, face_v)
         distance_vector = pos_xyz - closest
         dist = wp.length(distance_vector)
-        normals[tid_env, tid_obj_mesh_id, tid_point] = wp.mesh_eval_face_normal(object_meshes[env_idx, tid_obj_mesh_id], face_index)
-        normals[tid_env, tid_obj_mesh_id, tid_point] = wp.transform_vector(mesh_pose, normals[tid_env, tid_obj_mesh_id, tid_point])
+        normals[tid_env, tid_obj_mesh_id, tid_point] = wp.mesh_eval_face_normal(
+            object_meshes[env_idx, tid_obj_mesh_id], face_index
+        )
+        normals[tid_env, tid_obj_mesh_id, tid_point] = wp.transform_vector(
+            mesh_pose, normals[tid_env, tid_obj_mesh_id, tid_point]
+        )
         distances[tid_env, tid_obj_mesh_id, tid_point] = dist * sign
     else:
         distances[tid_env, tid_obj_mesh_id, tid_point] = max_dist

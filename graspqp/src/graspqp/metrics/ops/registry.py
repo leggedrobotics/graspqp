@@ -1,10 +1,11 @@
-import torch
 from enum import Enum
 
-from .dexgrasp import DexgraspSpanMetric
-from .tdg import TDGSpanMetric
-from .span import OverallFrictionConeSpanMetric, EucledianFrictionConeSpanMetric
+import torch
+
 from ..solver.scipy_solver import ScipyLsqSolver
+from .dexgrasp import DexgraspSpanMetric
+from .span import EucledianFrictionConeSpanMetric, OverallFrictionConeSpanMetric
+from .tdg import TDGSpanMetric
 
 try:
     from graspqp.metrics.solver.qp_solver import SQPLsqSolver

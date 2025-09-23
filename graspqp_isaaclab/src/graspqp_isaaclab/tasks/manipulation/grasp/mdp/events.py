@@ -11,13 +11,10 @@
 # from __future__ import annotations
 
 import torch
-
-
-from isaaclab.assets import RigidObject, Articulation
+from isaaclab.assets import Articulation, RigidObject
+from isaaclab.envs import ManagerBasedEnv
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils.math import quat_apply, quat_inv
-
-from isaaclab.envs import ManagerBasedEnv
 
 
 def reset_state(

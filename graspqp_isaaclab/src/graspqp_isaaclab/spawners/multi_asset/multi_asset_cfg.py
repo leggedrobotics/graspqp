@@ -14,12 +14,12 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import MISSING
 
-from pxr import Usd
-
 import isaaclab.sim as sim_utils
 from isaaclab.utils import configclass
+from pxr import Usd
 
-from .multi_asset import default_selection_func, spawn_multi_object_randomly_sdf
+from .multi_asset import (default_selection_func,
+                          spawn_multi_object_randomly_sdf)
 
 
 @configclass

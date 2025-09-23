@@ -1,5 +1,6 @@
-import torch
 import os
+
+import torch
 
 file_dir = os.path.dirname(__file__)
 WEIGHTS_PATH = os.path.join(

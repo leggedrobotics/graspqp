@@ -1,25 +1,24 @@
 """
-Last modified date: 2023.02.23
-Author: Ruicheng Wang, Jialiang Zhang
-Description: Class ObjectModel
+Based on Dexgraspnet: https://pku-epic.github.io/DexGraspNet/
 """
 
 import contextlib
-import os
-import trimesh as tm
-import torch
-import pytorch3d.structures
-import pytorch3d.ops
 import glob
+import os
+
 import numpy as np
-import contextlib
+import pytorch3d.ops
+import pytorch3d.structures
+import torch
+import trimesh as tm
 
 SDF_BACKEND = os.environ.get("SDF_BACKEND", "TORCHSDF").upper()
 
 if SDF_BACKEND == "TORCHSDF":
-    from torchsdf import index_vertices_by_faces, compute_sdf
+    from torchsdf import compute_sdf, index_vertices_by_faces
 elif SDF_BACKEND == "WARP":
     import warp as wp
+
     from graspqp.utils import warp as wp_utils
 elif SDF_BACKEND == "KAOLIN":
     import kaolin
@@ -31,7 +30,6 @@ import time
 
 
 class ObjectModel:
-
     def __init__(self, data_root_path, batch_size_each, scale=1.0, num_samples=2000, device="cuda"):
         """
         Create a Object Model

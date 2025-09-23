@@ -516,7 +516,7 @@
       <mass value="0.01" />
       <inertia ixx="0." ixy="0." ixz="0." iyy="0." iyz="0." izz="0." />
     </inertial>
-    <!--     
+    <!--
     <visual>
       <origin xyz="0. 0. -0." rpy="0. -1.5707963 0. "/>
       <geometry>
@@ -543,7 +543,7 @@
       </geometry>
     </visual>
     <collision>
-      
+
       <origin xyz="-0. 0. 0.0000001" rpy="0. 0. -1.5707961" />
       <geometry>
         <mesh filename="meshes/col_robot0_V_thdistal.obj" scale="1. 1. 1." />
@@ -621,7 +621,7 @@
       <mass value="4." />
       <inertia ixx="0." ixy="0." ixz="0." iyy="0." iyz="0." izz="0." />
     </inertial>
-    <!--     
+    <!--
     <visual>
       <origin xyz="0.0000006 -0.2157551 0.2416556" rpy="-0.039669 1.5506567 1.5311217"/>
       <geometry>

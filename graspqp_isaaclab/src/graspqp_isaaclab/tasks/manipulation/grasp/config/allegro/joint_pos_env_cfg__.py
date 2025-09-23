@@ -3,33 +3,22 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
+from grasp_mining.models.hand_model_cfg import HandModelCfg
+# from grasp_mining.tasks.manipulation.grasp.grasp_env_cfg import GraspEnvCfg
+from grasp_mining.tasks.manipulation.grasp.config.handle_mining_env import \
+    HandleGraspMiningEnvCfg
 ##
 # Pre-defined configs
 ##
 # from isaaclab_assets.robots.allegro import ALLEGRO_HAND_CFG, ALLEGRO_HAND_ACTUATED_JOINT_NAMES, ALLEGRO_STANDALONE_CFG
 from graspqp_isaaclab.assets.allegro import ALLEGRO_HAND_CFG
-
-# from grasp_mining.tasks.manipulation.grasp.grasp_env_cfg import GraspEnvCfg
-from grasp_mining.tasks.manipulation.grasp.config.handle_mining_env import HandleGraspMiningEnvCfg
-
-# from grasp_mining.tasks.manipulation.grasp.config.object_mining_env import ObjectGraspMiningEnvCfg, ObjectLiftEnvCfg
-from graspqp_isaaclab.tasks.manipulation.grasp.config.object_mining_env import ObjectGraspMiningEnvCfg
-
-
-from graspqp_isaaclab.tasks.manipulation.grasp.config.object_mining_env import ObjectGraspMiningEnvCfg
-
 from graspqp_isaaclab.tasks.manipulation.grasp import mdp
-from isaaclab.utils import configclass
-
+# from grasp_mining.tasks.manipulation.grasp.config.object_mining_env import ObjectGraspMiningEnvCfg, ObjectLiftEnvCfg
+from graspqp_isaaclab.tasks.manipulation.grasp.config.object_mining_env import \
+    ObjectGraspMiningEnvCfg
 from isaaclab.managers.scene_entity_cfg import SceneEntityCfg
-
-
 # from isaaclab.envs import mdp
 from isaaclab.utils import configclass
-
-from isaaclab.managers.scene_entity_cfg import SceneEntityCfg
-
-from grasp_mining.models.hand_model_cfg import HandModelCfg
 
 # import torch
 

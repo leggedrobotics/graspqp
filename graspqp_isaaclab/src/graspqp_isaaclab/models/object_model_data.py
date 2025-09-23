@@ -1,13 +1,11 @@
-from isaaclab.assets.rigid_object import RigidObjectData
-
+import isaaclab.utils.math as math_utils
 import omni.physics.tensors.impl.api as physx
 import torch
-import isaaclab.utils.math as math_utils
+from isaaclab.assets.rigid_object import RigidObjectData
 from isaaclab.utils.buffers import TimestampedBuffer
 
 
 class RigidObjectModelData(RigidObjectData):
-
     def __init__(self, root_physx_view: physx.RigidBodyView, device: str):
         super().__init__(root_physx_view, device)
         self.surface_pts_b: torch.Tensor = None

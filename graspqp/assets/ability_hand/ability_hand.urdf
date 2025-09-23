@@ -152,7 +152,7 @@
         <mesh filename="urdf_meshes/index_L1_visuals_index_mesh_1.obj" scale="1. 1. 1."/>
       </geometry>
     </visual>
-    
+
     <collision>
       <origin xyz="0. 0.0032577 -0.0384727" rpy="1.5707964 1.4863216 1.5707964"/>
       <geometry>
@@ -304,7 +304,7 @@
 
 
     <collision>
-      
+
       <origin xyz="-0.0147507 0. 0.0278284" rpy="1.8325957 -1.5707964 0. "/>
       <geometry>
         <mesh filename="urdf_meshes/thumb_L1_collision.obj" scale="1. 1. 1."/>
@@ -313,7 +313,7 @@
     </collision>
   </link>
 
-  
+
   <link name="thumb_L2">
     <inertial>
       <origin xyz="0. 0. 0." rpy="0. 0. 0."/>
@@ -327,7 +327,7 @@
         <mesh filename="urdf_meshes/thumb_mesh_2.obj" scale="1. 1. 1."/>
       </geometry>
     </visual>
-    
+
     <collision>
       <origin xyz="0.0039348 0.0233402 -0.0651867" rpy="-1.5707957 1.2269664 1.5707964"/>
       <geometry>
@@ -350,11 +350,11 @@
     <parent link="middle_L2"/>
     <child link="middle_tip"/>
   </joint>
-  <link name="pinky_tip">   
+  <link name="pinky_tip">
   </link>
   <joint name="pinky_tip_joint" type="fixed">
     <origin xyz="0. -0.015 -0.035" rpy="0. 0. 0."/>
-    <parent link="pinky_L2"/>   
+    <parent link="pinky_L2"/>
     <child link="pinky_tip"/>
   </joint>
   <link name="ring_tip">
@@ -371,7 +371,7 @@
     <parent link="thumb_L2"/>
     <child link="thumb_tip"/>
   </joint>
-  
+
   <link name="wrist_connector">
     <inertial>
       <origin xyz="0. 0. 0." rpy="0. 0. 0."/>

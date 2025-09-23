@@ -241,9 +241,7 @@ class StaticShowGraspAgent(Agent):
                 env_ids=env_ids_sequence,
                 joint_ids=hand.data.actuated_joint_indices,
             )
-            hand.set_default_joint_positions(
-                joint_position, joint_ids=hand.data.actuated_joint_indices, env_ids=self._env_ids
-            )
+            hand.set_default_joint_positions(joint_position, joint_ids=hand.data.actuated_joint_indices, env_ids=self._env_ids)
 
     def get_actions(self):
         """Get zero actions (no movement for visualization)."""

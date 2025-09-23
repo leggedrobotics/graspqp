@@ -8,7 +8,7 @@
     "n_points": 4
   },
   "RIQ_link_3_joint_a": {
-    "n_points": 8  
+    "n_points": 8
   },
 
   "RIQ_link_1_joint_b": {
@@ -18,7 +18,7 @@
     "n_points": 4
   },
   "RIQ_link_3_joint_b": {
-    "n_points": 8  
+    "n_points": 8
   },
 
   "RIQ_link_1_joint_c": {
@@ -33,24 +33,24 @@
 },
 "pinch":{
   "RIQ_link_3_joint_a": {
-    "n_points": 8  
+    "n_points": 8
 
   },
   "RIQ_link_3_joint_b": {
-    "n_points": 8  
+    "n_points": 8
   }
 
 },
 "precision":{
   "RIQ_link_3_joint_a": {
-    "n_points": 8  
+    "n_points": 8
 
   },
   "RIQ_link_3_joint_b": {
-    "n_points": 8  
+    "n_points": 8
   }, "RIQ_link_3_joint_c": {
-    "n_points": 8  
+    "n_points": 8
   }
 
 }
-} 
+}

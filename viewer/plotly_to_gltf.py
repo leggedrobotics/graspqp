@@ -24,6 +24,7 @@
 
 from dataclasses import dataclass
 from typing import List, Optional, Sequence, Union
+
 import numpy as np
 
 # Optional import guards keep this import light if you only build extra meshes
@@ -32,18 +33,8 @@ try:
 except Exception:
     go = None  # type: ignore
 
-from pygltflib import (
-    GLTF2,
-    Scene,
-    Node,
-    Mesh,
-    Buffer,
-    BufferView,
-    Accessor,
-    Asset,
-    Primitive,
-    Material,
-)
+from pygltflib import (GLTF2, Accessor, Asset, Buffer, BufferView, Material,
+                       Mesh, Node, Primitive, Scene)
 
 try:
     # Newer naming in some releases
@@ -150,9 +141,7 @@ def _rgba_from_plotly(color, opacity: Optional[float], fallback=(0.8, 0.8, 0.8, 
         elif s.startswith("rgba"):
             nums = s[s.find("(") + 1 : s.find(")")].split(",")
             if len(nums) == 4:
-                r, g, b, a = _norm4(
-                    float(nums[0]), float(nums[1]), float(nums[2]), float(nums[3])
-                )
+                r, g, b, a = _norm4(float(nums[0]), float(nums[1]), float(nums[2]), float(nums[3]))
             else:
                 r, g, b, a = fallback
         elif s.startswith("rgb"):
@@ -196,9 +185,7 @@ class GLTFBuilder:
             self.bin.extend(b"\x00" * pad)
         offset = len(self.bin)
         self.bin.extend(data)
-        bv = BufferView(
-            buffer=0, byteOffset=offset, byteLength=len(data), target=target
-        )
+        bv = BufferView(buffer=0, byteOffset=offset, byteLength=len(data), target=target)
         self.bufferViews.append(bv)
         return len(self.bufferViews) - 1
 
@@ -224,17 +211,13 @@ class GLTFBuilder:
         self.accessors.append(acc)
         return len(self.accessors) - 1
 
-    def get_or_create_material(
-        self, rgba: Sequence[float], name: Optional[str] = None
-    ) -> int:
+    def get_or_create_material(self, rgba: Sequence[float], name: Optional[str] = None) -> int:
         key = tuple(np.clip(rgba, 0.0, 1.0).tolist())
         if key in self.material_cache:
             return self.material_cache[key]
         mat = Material(
             name=name or f"mat_{len(self.materials)}",
-            pbrMetallicRoughness=_PBRType(
-                baseColorFactor=list(key), metallicFactor=0.0, roughnessFactor=1.0
-            ),
+            pbrMetallicRoughness=_PBRType(baseColorFactor=list(key), metallicFactor=0.0, roughnessFactor=1.0),
             doubleSided=True,
         )
         self.materials.append(mat)
@@ -263,9 +246,7 @@ class GLTFBuilder:
         pos_bytes = positions.tobytes()
         bv_pos = self._push_blob(pos_bytes, target=T_ARRAY)
         pos_min, pos_max = _minmax_vec(positions)
-        acc_pos = self._add_accessor(
-            bv_pos, CTYPE_FLOAT, len(positions), "VEC3", pos_min, pos_max
-        )
+        acc_pos = self._add_accessor(bv_pos, CTYPE_FLOAT, len(positions), "VEC3", pos_min, pos_max)
 
         prim_kwargs = {"attributes": {"POSITION": acc_pos}, "mode": mode}
 
@@ -302,17 +283,13 @@ class GLTFBuilder:
         # Positions
         bv_pos = self._push_blob(vtx.tobytes(), target=T_ARRAY)
         pos_min, pos_max = _minmax_vec(vtx)
-        acc_pos = self._add_accessor(
-            bv_pos, CTYPE_FLOAT, len(vtx), "VEC3", pos_min, pos_max
-        )
+        acc_pos = self._add_accessor(bv_pos, CTYPE_FLOAT, len(vtx), "VEC3", pos_min, pos_max)
 
         # Indices
         bv_idx = self._push_blob(fcs.ravel().tobytes(), target=T_ELEMENT_ARRAY)
         acc_idx = self._add_accessor(bv_idx, CTYPE_UINT, fcs.size, "SCALAR")
 
-        prim = Primitive(
-            attributes={"POSITION": acc_pos}, indices=acc_idx, mode=MODE_TRIANGLES
-        )
+        prim = Primitive(attributes={"POSITION": acc_pos}, indices=acc_idx, mode=MODE_TRIANGLES)
         prim.material = self.get_or_create_material(rgba, name=f"{name}_mat")
 
         mesh = Mesh(name=name, primitives=[prim])
@@ -358,9 +335,7 @@ def _as_np(arr) -> np.ndarray:
     return np.asarray(arr, dtype=np.float64)
 
 
-def _scatter3d_to_gltf(
-    builder: GLTFBuilder, trace, scale: float = 1.0, name: str = "scatter"
-):
+def _scatter3d_to_gltf(builder: GLTFBuilder, trace, scale: float = 1.0, name: str = "scatter"):
     x = _as_np(getattr(trace, "x", []))
     y = _as_np(getattr(trace, "y", []))
     z = _as_np(getattr(trace, "z", []))
@@ -373,9 +348,7 @@ def _scatter3d_to_gltf(
     idx_map = -np.ones(len(x), dtype=np.int64)
     idx_map[valid] = np.arange(valid.sum())
 
-    positions = np.column_stack([x[valid], y[valid], z[valid]]).astype(
-        np.float32
-    ) * float(scale)
+    positions = np.column_stack([x[valid], y[valid], z[valid]]).astype(np.float32) * float(scale)
 
     mode = (getattr(trace, "mode", "") or "").lower()
     want_points = "markers" in mode
@@ -433,9 +406,7 @@ def _scatter3d_to_gltf(
             )
 
 
-def _mesh3d_to_gltf(
-    builder: GLTFBuilder, trace, scale: float = 1.0, name: str = "mesh"
-):
+def _mesh3d_to_gltf(builder: GLTFBuilder, trace, scale: float = 1.0, name: str = "mesh"):
     # Needs x/y/z and i/j/k
     x = _as_np(getattr(trace, "x", []))
     y = _as_np(getattr(trace, "y", []))

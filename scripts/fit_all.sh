@@ -155,13 +155,13 @@ for file in "$folder"/*; do
     if [[ ! -d "$file" ]]; then
         continue  # Skip non-directories
     fi
-    
+
     filename=$(basename -- "$file")
     # Construct path to check for existing grasp prediction file
     CHECK_FILE_PATH="$file/grasp_predictions/$HAND/${N_CONTACTS}_contacts/$ENERGY_METHOD/$GRASP_TYPE/${filename}_step_7000.dexgrasp.pt"
-    
+
     # Check if file exists
-    if [[ -f "$CHECK_FILE_PATH" ]]; then     
+    if [[ -f "$CHECK_FILE_PATH" ]]; then
         echo "  Skipping $filename - grasp prediction already exists"
         skipped_cnt=$((skipped_cnt + 1))
         continue
@@ -169,29 +169,29 @@ for file in "$folder"/*; do
 
     echo "  Adding $filename to processing queue"
     curr_asset_cnt=$((curr_asset_cnt + 1))
-    
+
     # Add to asset string
     if [[ -z "$asset_str" ]]; then
         asset_str="$filename"
     else
         asset_str="$asset_str $filename"
     fi
-    
+
     # Check if we have enough assets for a batch
     if [[ $curr_asset_cnt -eq $num_assets ]]; then
         echo ""
         echo "Creating batch with assets: $asset_str"
         dt=$(date '+%H_%M_%S')
         total_asset_cnt=$((total_asset_cnt + curr_asset_cnt))
-        
+
         # Create a file in bin/ with the asset names
         name="assets_${HAND}_${GRASP_TYPE}_${dt}_${total_asset_cnt}"
         asset_file="$bin_folder/$name.txt"
         run_script="$bin_folder/run_$name.sh"
-        
+
         echo "  Creating asset file: $asset_file"
         echo "$asset_str" > "$asset_file"
-        
+
         # Create corresponding executable file
         echo "  Creating run script: $run_script"
         cat > "$run_script" << EOF
@@ -206,7 +206,7 @@ python scripts/fit.py \\
     --dataset "$(basename "$folder")" \\
 EOF
         chmod +x "$run_script"
-        
+
         # Reset counters for next batch
         curr_asset_cnt=0
         asset_str=""
@@ -220,14 +220,14 @@ if [[ $curr_asset_cnt -gt 0 ]]; then
     echo "Creating final batch with remaining assets: $asset_str"
     dt=$(date '+%H_%M_%S')
     total_asset_cnt=$((total_asset_cnt + curr_asset_cnt))
-    
+
     name="assets_${HAND}_${GRASP_TYPE}_${dt}_${total_asset_cnt}"
     asset_file="$bin_folder/$name.txt"
     run_script="$bin_folder/run_$name.sh"
-    
+
     echo "  Creating asset file: $asset_file"
     echo "$asset_str" > "$asset_file"
-    
+
     echo "  Creating run script: $run_script"
     cat > "$run_script" << EOF
 #!/bin/bash

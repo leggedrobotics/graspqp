@@ -1,5 +1,5 @@
-import torch
 import numpy as np
+import torch
 from scipy.optimize import lsq_linear
 
 
@@ -10,16 +10,13 @@ def _solve_lsq(args):
 
 
 class ScipyLsqSolver:
-
     def __init__(self):
         pass
 
     @classmethod
     def from_mat(cls, A, b, step_size=0.15, solver_kwargs={}):
         solver = cls()
-        solver.build_solver_from_mat(
-            A, b, step_size=step_size, solver_kwargs=solver_kwargs
-        )
+        solver.build_solver_from_mat(A, b, step_size=step_size, solver_kwargs=solver_kwargs)
         return solver
 
     def build_solver_from_mat(self, A, b, step_size=0.15, solver_kwargs={}):
@@ -87,11 +84,7 @@ class ScipyLsqSolver:
                     .clone()
                 )
             if init.ndim == 1:
-                init = (
-                    init.unsqueeze(0)
-                    .expand(self._batch_size, self._num_wrenches)
-                    .clone()
-                )
+                init = init.unsqueeze(0).expand(self._batch_size, self._num_wrenches).clone()
             elif init.ndim == 2:
                 init = init.clone().to(self._device)
         # clamp init to bounds
@@ -106,18 +99,8 @@ class ScipyLsqSolver:
             A = A.flatten(0, 1)
             b = b.flatten(0, 1)
 
-        u = (
-            torch.ones(
-                (A.shape[0], self._num_wrenches), device=self._device, dtype=A.dtype
-            )
-            * max_bound
-        )
-        l = (
-            torch.ones(
-                (A.shape[0], self._num_wrenches), device=self._device, dtype=A.dtype
-            )
-            * min_bound
-        )
+        u = torch.ones((A.shape[0], self._num_wrenches), device=self._device, dtype=A.dtype) * max_bound
+        l = torch.ones((A.shape[0], self._num_wrenches), device=self._device, dtype=A.dtype) * min_bound
 
         A_np = A.detach().cpu().numpy().astype(float)
         b_np = b.detach().cpu().numpy().astype(float)
@@ -127,18 +110,12 @@ class ScipyLsqSolver:
 
         for idx, (A_single, b_single) in enumerate(zip(A_np, b_np)):
             # solve with scipy
-            res = lsq_linear(
-                A_single, b_single, bounds=(bounds[0][idx], bounds[1][idx])
-            )
+            res = lsq_linear(A_single, b_single, bounds=(bounds[0][idx], bounds[1][idx]))
             solutions.append(res.x)
             values.append(res.cost)
 
-        solutions = torch.from_numpy(np.stack(solutions)).to(
-            device=self._device, dtype=A.dtype
-        )
-        values = torch.from_numpy(np.stack(values)).to(
-            device=self._device, dtype=A.dtype
-        )
+        solutions = torch.from_numpy(np.stack(solutions)).to(device=self._device, dtype=A.dtype)
+        values = torch.from_numpy(np.stack(values)).to(device=self._device, dtype=A.dtype)
         x = solutions.view(*batch_shape, self._num_wrenches)
         value = values.view(*batch_shape)
 

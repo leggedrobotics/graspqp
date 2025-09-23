@@ -9,16 +9,16 @@ from __future__ import annotations
 
 import random
 import re
-import torch
 from typing import TYPE_CHECKING
 
+import isaaclab.sim as sim_utils
 import isaacsim.core.utils.prims as prim_utils
 import omni.usd
+import torch
+from isaaclab.sim.spawners.spawner_cfg import SpawnerCfg
 from pxr import Gf, Sdf, Semantics, Usd, UsdGeom, Vt
 
-import isaaclab.sim as sim_utils
 from .asset_randomizer_cfg import AssetRandomizerCfg
-from isaaclab.sim.spawners.spawner_cfg import SpawnerCfg
 
 if TYPE_CHECKING:
     from .multi_asset_cfg import MultiAssetCfg
@@ -64,9 +64,7 @@ def spawn_multi_object_randomly_sdf(
         source_prim_paths = sim_utils.find_matching_prim_paths(root_path)
         # if no matching prims are found, raise an error
         if len(source_prim_paths) == 0:
-            raise RuntimeError(
-                f"Unable to find source prim path: '{root_path}'. Please create the prim before spawning."
-            )
+            raise RuntimeError(f"Unable to find source prim path: '{root_path}'. Please create the prim before spawning.")
     else:
         source_prim_paths = [root_path]
 

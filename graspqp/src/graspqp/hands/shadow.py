@@ -1,12 +1,12 @@
-from graspqp.core import HandModel
-import torch
 import json
 import os
 
+import torch
 
-def getHandModel(
-    device: str, asset_dir: str, grasp_type: str = "all", **kwargs
-) -> HandModel:
+from graspqp.core import HandModel
+
+
+def getHandModel(device: str, asset_dir: str, grasp_type: str = "all", **kwargs) -> HandModel:
     contact_links = None
 
     if grasp_type is not None and grasp_type != "all":
@@ -30,7 +30,7 @@ def getHandModel(
         n_surface_points=512,
         forward_axis="z",
         up_axis="x",
-        grasp_axis = "y",
+        grasp_axis="y",
         use_collision_if_possible=True,
         default_state=torch.tensor(
             [

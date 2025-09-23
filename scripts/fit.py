@@ -2,44 +2,26 @@
 Based on Dexgraspnet: https://pku-epic.github.io/DexGraspNet/
 """
 
+import argparse
+import datetime
+import math
 import os
 
-
-import argparse
 import numpy as np
+import roma
 import torch
 from tqdm import tqdm
-import math
 
-from graspqp.hands import get_hand_model, AVAILABLE_HANDS
 from graspqp.core import ObjectModel
-
-from graspqp.core.initializations import initialize_convex_hull
 from graspqp.core.energy import calculate_energy
-
-from graspqp.core.optimizer import (
-    MalaStar,
-    AnnealingDexGraspNet,
-)
-from graspqp.utils.transforms import (
-    robust_compute_rotation_matrix_from_ortho6d,
-)
-
-from graspqp.utils.wandb_wrapper import WandbMockup
-from graspqp.utils.plot_utils import (
-    get_plotly_fig,
-    show_initialization,
-)
-
-
+from graspqp.core.initializations import initialize_convex_hull
+from graspqp.core.optimizer import AnnealingDexGraspNet, MalaStar
+from graspqp.hands import AVAILABLE_HANDS, get_hand_model
 from graspqp.metrics import GraspSpanMetricFactory
-
-import datetime
-import roma
-
-
-import torch
-
+from graspqp.utils.plot_utils import get_plotly_fig, show_initialization
+from graspqp.utils.transforms import \
+    robust_compute_rotation_matrix_from_ortho6d
+from graspqp.utils.wandb_wrapper import WandbMockup
 
 # prepare arguments
 parser = argparse.ArgumentParser()
@@ -485,8 +467,7 @@ for step in tqdm(range(1, args.n_iter + 1), desc="optimizing"):
                 "entropy/joints_entropy": joints_entropy.mean(),
                 "entropy/translation_entropy": translation_entropy.mean(),
                 "entropy/rotation_entropy": rotation_entropy.mean(),
-                "entropy/total": 0.5 * joints_entropy.mean()
-                + 0.5 * (translation_entropy.mean() + rotation_entropy.mean()),
+                "entropy/total": 0.5 * joints_entropy.mean() + 0.5 * (translation_entropy.mean() + rotation_entropy.mean()),
                 "stats/score": score.mean(),
             }
             wandb.log(data, step=step, commit=False)

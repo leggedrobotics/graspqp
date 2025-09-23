@@ -3,7 +3,6 @@ from qpth.qp import QPFunction
 
 
 class SQPLsqSolver:
-
     def __init__(self, sum_to_one=False):
         self._sum_to_one = sum_to_one
         self._qp_function = QPFunction(verbose=False, maxIter=12, eps=5e-2)
@@ -70,7 +69,12 @@ class SQPLsqSolver:
             init = torch.ones((self._batch_size, self._num_wrenches))
         else:
             if isinstance(init, (int, float)):
-                init = torch.tensor(init, device=self._device, dtype=A.dtype).view(1, 1).expand(self._batch_size, self._num_wrenches).clone()
+                init = (
+                    torch.tensor(init, device=self._device, dtype=A.dtype)
+                    .view(1, 1)
+                    .expand(self._batch_size, self._num_wrenches)
+                    .clone()
+                )
             if init.ndim == 1:
                 init = init.unsqueeze(0).expand(self._batch_size, self._num_wrenches).clone()
             elif init.ndim == 2:

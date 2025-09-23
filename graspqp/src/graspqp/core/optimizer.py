@@ -5,14 +5,23 @@ Based on Dexgraspnet: https://pku-epic.github.io/DexGraspNet/
 import torch
 from torch.distributions import Normal
 
-
-import torch
-
 normal = Normal(0, 1)
 
 
 class AnnealingDexGraspNet:
-    def __init__(self, hand_model, switch_possibility=0.5, starting_temperature=18, temperature_decay=0.95, annealing_period=30, step_size=0.005, stepsize_period=50, mu=0.98, device="cpu", **kwargs):
+    def __init__(
+        self,
+        hand_model,
+        switch_possibility=0.5,
+        starting_temperature=18,
+        temperature_decay=0.95,
+        annealing_period=30,
+        step_size=0.005,
+        stepsize_period=50,
+        mu=0.98,
+        device="cpu",
+        **kwargs
+    ):
         """
         Create a optimizer
 
@@ -70,13 +79,19 @@ class AnnealingDexGraspNet:
         s = self.step_size * self.temperature_decay ** torch.div(self.step, self.step_size_period, rounding_mode="floor")
         step_size = torch.zeros(*self.hand_model.hand_pose.shape, dtype=torch.float, device=self.device) + s
 
-        self.ema_grad_hand_pose = self.mu * (self.hand_model.hand_pose.grad**2).mean(0) + (1 - self.mu) * self.ema_grad_hand_pose
+        self.ema_grad_hand_pose = (
+            self.mu * (self.hand_model.hand_pose.grad**2).mean(0) + (1 - self.mu) * self.ema_grad_hand_pose
+        )
 
-        hand_pose = self.hand_model.hand_pose - step_size * self.hand_model.hand_pose.grad / (torch.sqrt(self.ema_grad_hand_pose) + 1e-6)
+        hand_pose = self.hand_model.hand_pose - step_size * self.hand_model.hand_pose.grad / (
+            torch.sqrt(self.ema_grad_hand_pose) + 1e-6
+        )
         batch_size, n_contact = self.hand_model.contact_point_indices.shape
         switch_mask = torch.rand(batch_size, n_contact, dtype=torch.float, device=self.device) < self.switch_possibility
         contact_point_indices = self.hand_model.contact_point_indices.clone()
-        contact_point_indices[switch_mask] = torch.randint(self.hand_model.n_contact_candidates, size=[switch_mask.sum()], device=self.device)
+        contact_point_indices[switch_mask] = torch.randint(
+            self.hand_model.n_contact_candidates, size=[switch_mask.sum()], device=self.device
+        )
 
         self.old_hand_pose = self.hand_model.hand_pose
         self.old_contact_point_indices = self.hand_model.contact_point_indices
@@ -103,7 +118,9 @@ class AnnealingDexGraspNet:
         """
 
         batch_size = energy.shape[0]
-        temperature = self.starting_temperature * self.temperature_decay ** torch.div(self.step, self.annealing_period, rounding_mode="floor")
+        temperature = self.starting_temperature * self.temperature_decay ** torch.div(
+            self.step, self.annealing_period, rounding_mode="floor"
+        )
 
         alpha = torch.rand(batch_size, dtype=torch.float, device=self.device)
         accept = alpha < torch.exp((energy - new_energy) / temperature)
@@ -133,7 +150,21 @@ class AnnealingDexGraspNet:
 
 
 class MalaStar:
-    def __init__(self, hand_model, switch_possibility=0.5, starting_temperature=18, temperature_decay=0.95, annealing_period=30, step_size=0.005, stepsize_period=50, mu=0.98, device="cpu", global_ema=False, clip_grad=False, batch_size=-1):
+    def __init__(
+        self,
+        hand_model,
+        switch_possibility=0.5,
+        starting_temperature=18,
+        temperature_decay=0.95,
+        annealing_period=30,
+        step_size=0.005,
+        stepsize_period=50,
+        mu=0.98,
+        device="cpu",
+        global_ema=False,
+        clip_grad=False,
+        batch_size=-1,
+    ):
         """
         Implementation of MALA* optimizer introduced in GraspQP.
         """
@@ -161,7 +192,9 @@ class MalaStar:
         self.old_old_grad_hand_pose = None
         self.clip_grad = clip_grad
 
-        self.ema_grad_hand_pose = torch.zeros(self.hand_model.hand_pose.shape[0], self.hand_model.n_dofs + 9, dtype=torch.float, device=device)
+        self.ema_grad_hand_pose = torch.zeros(
+            self.hand_model.hand_pose.shape[0], self.hand_model.n_dofs + 9, dtype=torch.float, device=device
+        )
 
     def try_step(self):
         """
@@ -187,7 +220,12 @@ class MalaStar:
             n_grasps, n_dofs = self.hand_model.hand_pose.shape
             n_assets = n_grasps // self.batch_size
 
-            grad = gradient.view(n_assets, self.batch_size, n_dofs).mean(0, keepdim=True).repeat_interleave(n_assets, dim=0).view(n_grasps, n_dofs)
+            grad = (
+                gradient.view(n_assets, self.batch_size, n_dofs)
+                .mean(0, keepdim=True)
+                .repeat_interleave(n_assets, dim=0)
+                .view(n_grasps, n_dofs)
+            )
             grad = (grad**2).mean(0)
         else:
             grad = (gradient**2).mean(0)
@@ -214,7 +252,9 @@ class MalaStar:
         batch_size, n_contact = self.hand_model.contact_point_indices.shape
         switch_mask = torch.rand(batch_size, n_contact, dtype=torch.float, device=self.device) < self.switch_possibility
         contact_point_indices = self.hand_model.contact_point_indices.clone()
-        contact_point_indices[switch_mask] = torch.randint(self.hand_model.n_contact_candidates, size=[switch_mask.sum()], device=self.device)
+        contact_point_indices[switch_mask] = torch.randint(
+            self.hand_model.n_contact_candidates, size=[switch_mask.sum()], device=self.device
+        )
 
         self.old_hand_pose = self.hand_model.hand_pose
         self.old_contact_point_indices = self.hand_model.contact_point_indices
@@ -258,7 +298,9 @@ class MalaStar:
         """
         batch_size = energy.shape[0]
 
-        temperature = self.starting_temperature * self.temperature_decay ** torch.div(self.step, self.annealing_period, rounding_mode="floor")
+        temperature = self.starting_temperature * self.temperature_decay ** torch.div(
+            self.step, self.annealing_period, rounding_mode="floor"
+        )
 
         alpha = torch.rand(batch_size, dtype=torch.float, device=self.device)
 

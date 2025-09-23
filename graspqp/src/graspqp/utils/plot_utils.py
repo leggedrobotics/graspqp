@@ -47,7 +47,9 @@ def show_initialization(object_model, hand_model, batch_size, n_objects):
 
 def get_plotly_fig(object_model, hand_model, env_idx):
     object_plotly = object_model.get_plotly_data(env_idx, opacity=1.0, simplify=False)
-    hand_plotly = hand_model.get_plotly_data(env_idx, opacity=0.9, with_contact_points=True, with_surface_points=False, with_penetration_points=False, simplify=True)
+    hand_plotly = hand_model.get_plotly_data(
+        env_idx, opacity=0.9, with_contact_points=True, with_surface_points=False, with_penetration_points=False, simplify=True
+    )
 
     data = object_plotly + hand_plotly
     # get contact points and normals

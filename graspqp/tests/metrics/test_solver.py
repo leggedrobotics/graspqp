@@ -1,5 +1,5 @@
-import torch
 import pytest
+import torch
 
 
 def test_qpth_solver():

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import os
-import subprocess
 import argparse
 import glob
+import os
+import subprocess
 
 # Command line argument parser setup
 parser = argparse.ArgumentParser(description="Chunk and process assets for grasp evaluation in IsaacLab")
@@ -12,14 +12,10 @@ parser = argparse.ArgumentParser(description="Chunk and process assets for grasp
 parser.add_argument("python_file", type=str, help="Path to the Python file to execute for each chunk")
 
 # Data path and processing arguments
-parser.add_argument(
-    "--data_path", type=str, default="/data/handles/eval", help="Root folder path containing asset directories"
-)
+parser.add_argument("--data_path", type=str, default="/data/handles/eval", help="Root folder path containing asset directories")
 parser.add_argument("--n_grasps_per_obj", type=int, default=32, help="Number of grasps to evaluate per object")
 parser.add_argument("--max_envs", type=int, default=4096, help="Maximum number of simulation environments")
-parser.add_argument(
-    "--prediction_folder", default="grasp_predictions", help="Name of the folder containing grasp predictions"
-)
+parser.add_argument("--prediction_folder", default="grasp_predictions", help="Name of the folder containing grasp predictions")
 parser.add_argument("--n_contacts", type=int, default=12, help="Number of contact points for grasps")
 
 # Simulation and model configuration
@@ -33,9 +29,7 @@ parser.add_argument(
     default=None,
     help="Energy type used during training (if different from evaluation)",
 )
-parser.add_argument(
-    "--n_grasps_per_env", type=int, default=32, help="Number of grasps to evaluate per simulation environment"
-)
+parser.add_argument("--n_grasps_per_env", type=int, default=32, help="Number of grasps to evaluate per simulation environment")
 
 # Evaluation control arguments
 parser.add_argument("--force_reevaluate", action="store_true", help="Force re-evaluation even if results already exist")
@@ -108,9 +102,7 @@ def resolve_assets(assets: list[str]) -> list[str]:
                 args_cli.grasp_type,
                 "*.pt",
             )
-            raise FileNotFoundError(
-                f"\033[91mNo grasp files found in '{grasp_folder}'. " f"Checked {search_path}\033[0m"
-            )
+            raise FileNotFoundError(f"\033[91mNo grasp files found in '{grasp_folder}'. " f"Checked {search_path}\033[0m")
 
         # Select the appropriate grasp file based on selected step
         if args_cli.selected_step != -1:
@@ -146,9 +138,7 @@ for file in os.listdir(args_cli.data_path):
 
     if len(matches) == 0:
         # Alternative search patterns for USD files
-        matches = glob.glob(os.path.join(file_path, "coacd", f"{file}.usd")) + glob.glob(
-            os.path.join(file_path, f"{file}.usd")
-        )
+        matches = glob.glob(os.path.join(file_path, "coacd", f"{file}.usd")) + glob.glob(os.path.join(file_path, f"{file}.usd"))
 
     # Skip assets without USD files
     if len(matches) == 0:
@@ -156,9 +146,7 @@ for file in os.listdir(args_cli.data_path):
         continue
 
     if len(matches) > 1:
-        print(
-            f"\033[93m⚠️  [WARNING] Multiple USD assets found for {file}. " f"Selecting the first one. {matches}\033[0m"
-        )
+        print(f"\033[93m⚠️  [WARNING] Multiple USD assets found for {file}. " f"Selecting the first one. {matches}\033[0m")
 
     # Check if evaluation results already exist (skip if not forcing re-evaluation)
     eval_file = os.path.join(

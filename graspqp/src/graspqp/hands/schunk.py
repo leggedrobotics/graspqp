@@ -6,6 +6,7 @@ by a single prismatic joint that drives both fingers in opposite directions.
 """
 
 import torch
+
 from graspqp.core import HandModel
 
 

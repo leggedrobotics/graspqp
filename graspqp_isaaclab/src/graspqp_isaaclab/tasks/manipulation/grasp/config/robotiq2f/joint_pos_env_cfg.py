@@ -7,17 +7,12 @@
 # Pre-defined configs
 ##
 from graspqp_isaaclab.assets.robotiq2f import ROBOTIQ_2F_CFG
-
-from graspqp_isaaclab.tasks.manipulation.grasp.config.object_mining_env import (
-    ObjectGraspMiningEnvCfg,
-)
-
-from graspqp_isaaclab.tasks.manipulation.grasp import mdp
-from isaaclab.utils import configclass
-
-from isaaclab.managers.scene_entity_cfg import SceneEntityCfg
-
 from graspqp_isaaclab.models.hand_model_cfg import HandModelCfg
+from graspqp_isaaclab.tasks.manipulation.grasp import mdp
+from graspqp_isaaclab.tasks.manipulation.grasp.config.object_mining_env import \
+    ObjectGraspMiningEnvCfg
+from isaaclab.managers.scene_entity_cfg import SceneEntityCfg
+from isaaclab.utils import configclass
 
 
 @configclass

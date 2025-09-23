@@ -1,12 +1,12 @@
 import math
 import os
 
-from graspqp.utils.fk import robotiq2f140_fk
-
 import isaaclab.sim as sim_utils
+from graspqp_isaaclab.models.hand_model_cfg import HandModelCfg
 from isaaclab.actuators.actuator_cfg import ImplicitActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
-from graspqp_isaaclab.models.hand_model_cfg import HandModelCfg
+
+from graspqp.utils.fk import robotiq2f140_fk
 
 ##
 # Configuration

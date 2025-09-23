@@ -16,7 +16,7 @@ for HAND in "${HAND_TYPES[@]}"; do
 done
 
 # Compress with draco
-find . -type f -name "*.glb" -exec sh -c '     
+find . -type f -name "*.glb" -exec sh -c '
   for file; do
     out="${file%.glb}_draco.glb"
     echo "Compressing $file → $out"

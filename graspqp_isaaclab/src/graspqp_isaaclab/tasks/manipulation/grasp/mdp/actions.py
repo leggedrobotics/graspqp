@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Sequence
+
 from isaaclab.envs.mdp.actions.joint_actions import JointPositionAction
 
 

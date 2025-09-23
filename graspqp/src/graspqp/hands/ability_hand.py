@@ -1,7 +1,10 @@
-from graspqp.core import HandModel
-import torch
-import os
 import json
+import os
+
+import torch
+
+from graspqp.core import HandModel
+
 
 def get_all_joint_angles(joint_angles: torch.Tensor):
     mult, offset = 1.05851325, 0.0
@@ -32,24 +35,24 @@ def calculate_jacobian(joint_angles: torch.Tensor, hand_model):
     jacobian = hand_model.chain.jacobian(get_all_joint_angles(joint_angles))
     # modify the jacobian to account for the fact that the thumb_q2 joint is not used
     active_jacobian = jacobian[..., [0, 2, 4, 6, 8, 9]]
-    active_jacobian[..., :-2] = (
-        active_jacobian[..., :-2] + jacobian[..., [1, 3, 5, 7]] * mult
-    )
+    active_jacobian[..., :-2] = active_jacobian[..., :-2] + jacobian[..., [1, 3, 5, 7]] * mult
     return active_jacobian
 
 
-def getHandModel(device: str, asset_dir: str, grasp_type:str = "all", **kwargs) -> HandModel:
+def getHandModel(device: str, asset_dir: str, grasp_type: str = "all", **kwargs) -> HandModel:
     contact_links = None
-    
+
     if grasp_type is not None and grasp_type != "all":
         eigengrasp_file = f"{asset_dir}/ability_hand/eigengrasps.json"
         if not os.path.exists(eigengrasp_file):
             raise ValueError(f"eigengrasps.json not found at {eigengrasp_file}")
         json_data = json.load(open(eigengrasp_file))
         if grasp_type not in json_data:
-            raise ValueError(f"grasp type {grasp_type} not found in eigengrasps.json. Available grasp types are {list(json_data.keys())}")
+            raise ValueError(
+                f"grasp type {grasp_type} not found in eigengrasps.json. Available grasp types are {list(json_data.keys())}"
+            )
         contact_links = json_data[grasp_type]
-        
+
     params = dict(
         mjcf_path=f"{asset_dir}/ability_hand/ability_hand.urdf",
         mesh_path=f"{asset_dir}/ability_hand/urdf_meshes",
@@ -60,7 +63,7 @@ def getHandModel(device: str, asset_dir: str, grasp_type:str = "all", **kwargs) 
         n_surface_points=512,
         forward_axis="z",
         up_axis="x",
-        grasp_axis = "y",
+        grasp_axis="y",
         use_collision_if_possible=True,
         default_state=torch.tensor(
             [

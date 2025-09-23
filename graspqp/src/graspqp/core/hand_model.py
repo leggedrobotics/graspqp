@@ -2,31 +2,34 @@
 Based on Dexgraspnet: https://pku-epic.github.io/DexGraspNet/
 """
 
-import os
+import contextlib
 import json
+import os
+
 import numpy as np
 import torch
-from graspqp.utils.transforms import (
-    robust_compute_rotation_matrix_from_ortho6d,
-)
-import contextlib
+
+from graspqp.utils.transforms import \
+    robust_compute_rotation_matrix_from_ortho6d
 
 with contextlib.suppress(ImportError):
     import plotly.graph_objects as go
 
-import pytorch_kinematics as pk
-import pytorch3d.structures
-import pytorch3d.ops
-import trimesh as tm
 import contextlib
+
+import pytorch3d.ops
+import pytorch3d.structures
+import pytorch_kinematics as pk
+import trimesh as tm
 
 SDF_BACKEND = os.environ.get("SDF_BACKEND", "TORCHSDF").upper()
 
 if SDF_BACKEND == "WARP":
     import warp as wp
+
     from graspqp.utils import warp as wp_utils
 elif SDF_BACKEND == "TORCHSDF":
-    from torchsdf import index_vertices_by_faces, compute_sdf
+    from torchsdf import compute_sdf, index_vertices_by_faces
 elif SDF_BACKEND == "KAOLIN":
     import kaolin
 
@@ -34,9 +37,10 @@ import trimesh
 
 with contextlib.suppress(ImportError):
     import open3d as o3d
-import roma
 
-from pytorch_kinematics.transforms.rotation_conversions import matrix_to_quaternion
+import roma
+from pytorch_kinematics.transforms.rotation_conversions import \
+    matrix_to_quaternion
 
 
 @torch.jit.script
@@ -51,7 +55,6 @@ def pinv(A: torch.Tensor, l: float = 1e-3):
 
 
 class HandModel:
-
     @staticmethod
     def estimate_static_frame_from_hand_points(
         keypoint_3d_array: np.ndarray,
@@ -86,7 +89,8 @@ class HandModel:
         return frame
 
     def retarget(self, mano_keypoints):
-        from dex_retargeting.misc.constants import OPERATOR2MANO_RIGHT, ManoModel
+        from dex_retargeting.misc.constants import (OPERATOR2MANO_RIGHT,
+                                                    ManoModel)
 
         if not hasattr(self, "_retargeter") or self._retargeter is None:
             raise ValueError("Retargeter not loaded. Please load retargeter first.")
@@ -129,7 +133,8 @@ class HandModel:
 
     def load_retargeter(self, retargeter_path, urdf_root_dir=None):
         import yaml
-        from dex_retargeting.retarget.retargeting_config import RetargetingConfig
+        from dex_retargeting.retarget.retargeting_config import \
+            RetargetingConfig
 
         RetargetingConfig.set_default_urdf_dir(urdf_root_dir)
         cfg = RetargetingConfig.load_from_dict(yaml.safe_load(open(retargeter_path, "r"))["retargeting"])
@@ -159,13 +164,13 @@ class HandModel:
                     [1, 1, 1], dtype=torch.float, device=device
                 )
             elif visual.geom_type == "capsule":
-                return tm.primitives.Capsule(
-                    radius=visual.geom_param[0], height=visual.geom_param[1] * 2
-                ).apply_translation((0, 0, -visual.geom_param[1]))
+                return tm.primitives.Capsule(radius=visual.geom_param[0], height=visual.geom_param[1] * 2).apply_translation(
+                    (0, 0, -visual.geom_param[1])
+                )
             elif visual.geom_type == "cylinder":
-                return tm.primitives.Cylinder(
-                    radius=visual.geom_param[0], height=visual.geom_param[1]
-                ).apply_translation((0, 0, -visual.geom_param[1] / 2))
+                return tm.primitives.Cylinder(radius=visual.geom_param[0], height=visual.geom_param[1]).apply_translation(
+                    (0, 0, -visual.geom_param[1] / 2)
+                )
             elif visual.geom_type == "sphere":
                 return tm.primitives.Sphere(radius=visual.geom_param)
             elif visual.geom_type == "mesh":
@@ -277,9 +282,8 @@ class HandModel:
                             # sample surface points
                             points = tm.sample.sample_surface_even(mesh, 1000)[0]
                             # subsample with fps sampling
-                            from pytorch3d.ops.sample_farthest_points import (
-                                sample_farthest_points,
-                            )
+                            from pytorch3d.ops.sample_farthest_points import \
+                                sample_farthest_points
 
                             points = torch.tensor(points, dtype=torch.float, device=device)
                             points = sample_farthest_points(points.unsqueeze(0), K=num_points)[0].squeeze(0)
@@ -308,9 +312,7 @@ class HandModel:
                 if penetration_points is None or not (link_name in penetration_points):
                     penetration_keypoints = torch.tensor([], dtype=torch.float, device=device).reshape(0, 3)
                 else:
-                    penetration_keypoints = torch.tensor(
-                        penetration_points[link_name], dtype=torch.float, device=device
-                    )
+                    penetration_keypoints = torch.tensor(penetration_points[link_name], dtype=torch.float, device=device)
                 scales = torch.ones(len(penetration_keypoints), device=device) * 0.01
 
                 if len(penetration_keypoints) != 0:
@@ -470,9 +472,7 @@ class HandModel:
         self._joint_mask = None  # [0,2,4,6,8, 9]
         self._joint_filter = joint_filter
         self._actuated_joints_names = [
-            name
-            for name in self.chain.get_joint_parameter_names()
-            if self._joint_filter is None or name in self._joint_filter
+            name for name in self.chain.get_joint_parameter_names() if self._joint_filter is None or name in self._joint_filter
         ]
         self.n_dofs = len(self._actuated_joints_names)
         # self.n_dofs = len(self.chain.get_joint_parameter_names()) if self._joint_mask is None else len(self._joint_mask)
@@ -498,9 +498,7 @@ class HandModel:
         #     if contact_points_path is not None
         #     else None
         # )
-        penetration_points = (
-            json.load(open(penetration_points_path, "r")) if penetration_points_path is not None else None
-        )
+        penetration_points = json.load(open(penetration_points_path, "r")) if penetration_points_path is not None else None
 
         # build mesh
         if mjcf_path.endswith(".urdf"):
@@ -604,16 +602,12 @@ class HandModel:
         # sample surface points
 
         total_area = sum(areas.values())
-        num_samples = dict(
-            [(link_name, int(areas[link_name] / total_area * n_surface_points)) for link_name in self.mesh]
-        )
+        num_samples = dict([(link_name, int(areas[link_name] / total_area * n_surface_points)) for link_name in self.mesh])
         num_samples[list(num_samples.keys())[0]] += n_surface_points - sum(num_samples.values())
 
         for link_name in self.mesh:
             if num_samples[link_name] == 0:
-                self.mesh[link_name]["surface_points"] = torch.tensor([], dtype=torch.float, device=device).reshape(
-                    0, 3
-                )
+                self.mesh[link_name]["surface_points"] = torch.tensor([], dtype=torch.float, device=device).reshape(0, 3)
                 continue
             mesh = pytorch3d.structures.Meshes(
                 self.mesh[link_name]["vertices"].unsqueeze(0),
@@ -833,12 +827,8 @@ class HandModel:
             # self.all_contact_points is shape (B, C, 3)
             # contact_point_indices is shape (B, n_contact)
 
-            self.contact_points = self.all_contact_points.gather(
-                1, contact_point_indices.unsqueeze(-1).expand(-1, -1, 3)
-            )
-            self.contact_normals = self._all_contact_normals.gather(
-                1, contact_point_indices.unsqueeze(-1).expand(-1, -1, 3)
-            )
+            self.contact_points = self.all_contact_points.gather(1, contact_point_indices.unsqueeze(-1).expand(-1, -1, 3))
+            self.contact_normals = self._all_contact_normals.gather(1, contact_point_indices.unsqueeze(-1).expand(-1, -1, 3))
 
     def set_parameters(self, hand_pose, contact_point_indices=None, env_mask=None):
         """
@@ -874,12 +864,10 @@ class HandModel:
         self.global_rotation = robust_compute_rotation_matrix_from_ortho6d(self.hand_pose[:, 3:9])
         self.current_status = self.fk(self.hand_pose[:, 9:])
 
-        self.penetration_keypoints_expanded = self.penetration_keypoints.unsqueeze(0).expand(
-            self.hand_pose.shape[0], -1, -1
+        self.penetration_keypoints_expanded = self.penetration_keypoints.unsqueeze(0).expand(self.hand_pose.shape[0], -1, -1)
+        self.global_index_to_link_index_penetration_expanded = self.global_index_to_link_index_penetration.unsqueeze(0).expand(
+            self.hand_pose.shape[0], -1
         )
-        self.global_index_to_link_index_penetration_expanded = self.global_index_to_link_index_penetration.unsqueeze(
-            0
-        ).expand(self.hand_pose.shape[0], -1)
         self._set_contact_idxs(contact_point_indices, env_mask=env_mask)
 
         self.closing_force_des = self.contact_normals.clone()
@@ -977,9 +965,7 @@ class HandModel:
                 elif SDF_BACKEND == "KAOLIN":
                     face_indexes = self.mesh[link_name]["faces"]
                     verts = self.mesh[link_name]["vertices"]
-                    dis_local, _, _ = kaolin.metrics.trianglemesh.point_to_mesh_distance(
-                        x_local.unsqueeze(0), face_verts
-                    )
+                    dis_local, _, _ = kaolin.metrics.trianglemesh.point_to_mesh_distance(x_local.unsqueeze(0), face_verts)
                     dis_signs = kaolin.ops.mesh.check_sign(verts.unsqueeze(0), face_indexes, x_local.unsqueeze(0))
                     dis_signs = torch.where(
                         dis_signs,
@@ -1028,9 +1014,7 @@ class HandModel:
             n_surface_points = self.mesh[link_name]["penetration_keypoints"].shape[0]
             if n_surface_points == 0:
                 continue
-            points.append(
-                self.current_status[link_name].transform_points(self.mesh[link_name]["penetration_keypoints"])
-            )
+            points.append(self.current_status[link_name].transform_points(self.mesh[link_name]["penetration_keypoints"]))
             points[-1] = points[-1] @ self.global_rotation.transpose(1, 2) + self.global_translation.unsqueeze(1)
             lengths.append(n_surface_points)
 
@@ -1295,9 +1279,7 @@ class HandModel:
         batch_size = self.global_translation.shape[0]
         for link_name in self.mesh:
             n_surface_points = self.mesh[link_name]["penetration_keypoints"].shape[0]
-            points.append(
-                self.current_status[link_name].transform_points(self.mesh[link_name]["penetration_keypoints"])
-            )
+            points.append(self.current_status[link_name].transform_points(self.mesh[link_name]["penetration_keypoints"]))
             if 1 < batch_size != points[-1].shape[0]:
                 points[-1] = points[-1].expand(batch_size, n_surface_points, 3)
         points = torch.cat(points, dim=-2).to(self.device)

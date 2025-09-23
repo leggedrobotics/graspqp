@@ -1,4 +1,5 @@
 import torch
+
 from graspqp.core import HandModel
 
 
@@ -12,7 +13,7 @@ def getHandModel(device: str, asset_dir: str, **kwargs) -> HandModel:
         n_surface_points=512,
         forward_axis="z",
         up_axis="x",
-        grasp_axis = "y",
+        grasp_axis="y",
         use_collision_if_possible=True,
         default_state=torch.tensor(
             [

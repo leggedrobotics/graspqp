@@ -8,9 +8,10 @@
 from __future__ import annotations
 
 import colorsys
+from functools import lru_cache
+
 import numpy as np
 import torch
-from functools import lru_cache
 
 
 @lru_cache(maxsize=128)

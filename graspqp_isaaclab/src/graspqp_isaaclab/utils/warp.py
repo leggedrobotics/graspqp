@@ -7,12 +7,10 @@
 Collision handling functions and kernels.
 """
 
-import torch
-
-import warp as wp
-
-from isaaclab.utils.math import convert_quat
 import numpy as np
+import torch
+import warp as wp
+from isaaclab.utils.math import convert_quat
 
 
 @wp.kernel
@@ -172,9 +170,7 @@ def calc_obj_distances(
     )
     object_positions_wp = wp.from_torch(object_positions, dtype=wp.vec3)
 
-    object_rotations = convert_quat(
-        object_rotations.to(dtype=torch.float32, device=lookup_points.device), "xyzw"
-    ).contiguous()
+    object_rotations = convert_quat(object_rotations.to(dtype=torch.float32, device=lookup_points.device), "xyzw").contiguous()
     object_rotations_wp = wp.from_torch(object_rotations, dtype=wp.quat)
 
     if env_ids is None:

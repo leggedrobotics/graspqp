@@ -1,12 +1,10 @@
+import math
 import os
 
-
 import isaaclab.sim as sim_utils
-
+from graspqp_isaaclab.models.hand_model_cfg import HandModelCfg
 from isaaclab.actuators.actuator_cfg import ImplicitActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
-from graspqp_isaaclab.models.hand_model_cfg import HandModelCfg
-import math
 
 DYNAARM_ARM_JOINT_NAMES = ["SH_ROT", "SH_FLE", "EL_FLE", "FA_ROT", "WRIST_1", "WRIST_2"]
 
@@ -142,9 +140,7 @@ ABILITY_HAND_CFG = HandModelCfg(
             sleep_threshold=0.005,
             stabilization_threshold=0.0005,
         ),
-        collision_props=sim_utils.CollisionPropertiesCfg(
-            contact_offset=0.005, rest_offset=0.0, torsional_patch_radius=0.002
-        ),
+        collision_props=sim_utils.CollisionPropertiesCfg(contact_offset=0.005, rest_offset=0.0, torsional_patch_radius=0.002),
     ),
     init_state=ABILITY_HAND_DEFAULT,
     actuators={

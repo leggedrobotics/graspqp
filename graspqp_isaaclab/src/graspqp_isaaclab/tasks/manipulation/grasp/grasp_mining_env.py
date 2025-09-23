@@ -3,15 +3,15 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-import torch
+import math
 from dataclasses import MISSING
 
-from graspqp_isaaclab.tasks.manipulation.grasp import mdp
-
-
 import isaaclab.sim as sim_utils
+import torch
+from graspqp_isaaclab.tasks.manipulation.grasp import mdp
 from isaaclab.assets import Articulation, ArticulationCfg, AssetBaseCfg
-from isaaclab.assets.rigid_object.rigid_object_cfg import RigidObject, RigidObjectCfg
+from isaaclab.assets.rigid_object.rigid_object_cfg import (RigidObject,
+                                                           RigidObjectCfg)
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.managers import ActionTermCfg as ActionTerm
 from isaaclab.managers import EventTermCfg as EventTerm
@@ -22,8 +22,6 @@ from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.managers.scene_entity_cfg import SceneEntityCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
-
-import math
 
 SHOW = False
 GRAVITY = False

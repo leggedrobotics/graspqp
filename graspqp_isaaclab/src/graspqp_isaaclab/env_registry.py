@@ -5,14 +5,13 @@ with multiple assets, grippers, and simulation parameters. It handles environmen
 mapping, gripper configuration, and dynamic parameter updates from command line arguments.
 """
 
-from isaaclab_tasks.utils import parse_env_cfg
-from graspqp_isaaclab.utils.data import resolve_assets
-from graspqp_isaaclab.tasks import *  # noqa: F401
-
+import isaaclab.sim as sim_utils
 import isaaclab_tasks  # noqa: F401
 from graspqp_isaaclab.spawners.multi_asset.multi_asset_cfg import MultiAssetCfg
-import isaaclab.sim as sim_utils
+from graspqp_isaaclab.tasks import *  # noqa: F401
+from graspqp_isaaclab.utils.data import resolve_assets
 from isaaclab.utils import configclass
+from isaaclab_tasks.utils import parse_env_cfg
 
 
 class SelectionFunction:
@@ -83,12 +82,8 @@ def get_env_cfg(args_cli, collapse_grippers=False):
 
         for i in range(args_cli.n_grasps_per_env):
             # Update actions
-            setattr(
-                env_cfg.scene, f"robot_{i}", env_cfg.scene.robot.replace(prim_path="{ENV_REGEX_NS}/" + f"Robot_{i}")
-            )
-            setattr(
-                env_cfg.actions, f"hand_action_{i}", env_cfg.actions.hand_action.replace(asset_name="robot_" + f"{i}")
-            )
+            setattr(env_cfg.scene, f"robot_{i}", env_cfg.scene.robot.replace(prim_path="{ENV_REGEX_NS}/" + f"Robot_{i}"))
+            setattr(env_cfg.actions, f"hand_action_{i}", env_cfg.actions.hand_action.replace(asset_name="robot_" + f"{i}"))
             getattr(env_cfg.scene, f"robot_{i}").collision_group = i  # Make sure hands don't collide
 
         @configclass
@@ -119,11 +114,7 @@ def get_env_cfg(args_cli, collapse_grippers=False):
         env_cfg.scene.grasp_tracker.energy_method = args_cli.energy_type
         # env_cfg.scene.hand_mesh_sensor.energy_type = [args_cli.energy_type]
 
-    if (
-        hasattr(args_cli, "train_energy_type")
-        and args_cli.train_energy_type
-        and hasattr(env_cfg.scene, "hand_mesh_sensor")
-    ):
+    if hasattr(args_cli, "train_energy_type") and args_cli.train_energy_type and hasattr(env_cfg.scene, "hand_mesh_sensor"):
         print("Setting Train Energy Type to", args_cli.train_energy_type)
         env_cfg.scene.grasp_tracker.energy_type = args_cli.train_energy_type
         args_cli.energy_type = args_cli.train_energy_type

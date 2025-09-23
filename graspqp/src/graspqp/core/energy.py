@@ -45,21 +45,17 @@ def calculate_energy(
 
     # E_joints
     E_joints = torch.sum(
-        (hand_model.hand_pose[:, 9:] > hand_model.joints_upper)
-        * (hand_model.hand_pose[:, 9:] - hand_model.joints_upper),
+        (hand_model.hand_pose[:, 9:] > hand_model.joints_upper) * (hand_model.hand_pose[:, 9:] - hand_model.joints_upper),
         dim=-1,
     ) + torch.sum(
-        (hand_model.hand_pose[:, 9:] < hand_model.joints_lower)
-        * (hand_model.joints_lower - hand_model.hand_pose[:, 9:]),
+        (hand_model.hand_pose[:, 9:] < hand_model.joints_lower) * (hand_model.joints_lower - hand_model.hand_pose[:, 9:]),
         dim=-1,
     )
     losses["E_joints"] = E_joints
 
     # E_pen
     object_scale = object_model.object_scale_tensor.flatten().unsqueeze(1).unsqueeze(2)
-    object_surface_points = (
-        object_model.surface_points_tensor * object_scale
-    )  # (n_objects * batch_size_each, num_samples, 3)
+    object_surface_points = object_model.surface_points_tensor * object_scale  # (n_objects * batch_size_each, num_samples, 3)
     distances = hand_model.cal_distance(object_surface_points)
     distances[distances <= 0] = 0
     E_pen = distances.sum(-1)

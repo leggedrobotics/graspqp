@@ -1,13 +1,11 @@
-import torch
-
-
-import roma
-from isaaclab.utils.math import axis_angle_from_quat
+import os
 from typing import Tuple
 
-from prettytable import PrettyTable
-import os
 import pandas as pd
+import roma
+import torch
+from isaaclab.utils.math import axis_angle_from_quat
+from prettytable import PrettyTable
 
 
 class RunningStatistics:
@@ -68,9 +66,7 @@ class RunningStatistics:
 
     def _get_details_table(self):
         table = PrettyTable()
-        table.field_names = (
-            ["Env", "Asset ID", "Success Rate", "Successes", "Trials"] + list(self._infos.keys()) + ["Path"]
-        )
+        table.field_names = ["Env", "Asset ID", "Success Rate", "Successes", "Trials"] + list(self._infos.keys()) + ["Path"]
         table.float_format = "0.2"
         for env_id in range(self._n_envs):
             ratio = self.sucesses[env_id] / (self.trials[env_id] + 1e-3)
@@ -138,8 +134,9 @@ class RunningStatistics:
             print(table)
 
     def to_csv(self, file_name="eval_isaac_sim.csv", folders=None):
-        import pandas as pd
         import io
+
+        import pandas as pd
 
         details = self._get_details_table()
         csv = details.get_csv_string()

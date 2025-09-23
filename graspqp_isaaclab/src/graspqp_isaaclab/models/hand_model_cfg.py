@@ -1,9 +1,9 @@
 from typing import Callable
+
 from isaaclab.assets.articulation import ArticulationCfg
+from isaaclab.utils import configclass
 
 from .hand_model import HandModel
-
-from isaaclab.utils import configclass
 
 
 @configclass

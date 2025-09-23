@@ -1,14 +1,9 @@
 import torch
-from theseus.optimizer.linear.dense_solver import (
-    DenseSolver,
-    Objective,
-    DenseLinearization,
-    Linearization,
-    Optional,
-    Any,
-    Dict,
-    Type,
-)
+from theseus.optimizer.linear.dense_solver import (Any, DenseLinearization,
+                                                   DenseSolver, Dict,
+                                                   Linearization, Objective,
+                                                   Optional, Type)
+
 
 class CholeskyRegularizedDenseSolver(DenseSolver):
     def __init__(
@@ -34,8 +29,10 @@ class CholeskyRegularizedDenseSolver(DenseSolver):
         # solution[~valid_cholesky] = torch.linalg.lstsq(ATA_hat[~valid_cholesky], Atb[~valid_cholesky]).solution.squeeze(2)
         return solution
 
+
 class PinvDenseSolver(DenseSolver):
     """Dense solver using pseudo-inverse to solve the system of equations."""
+
     def __init__(
         self,
         objective: Objective,
@@ -55,5 +52,5 @@ class PinvDenseSolver(DenseSolver):
         # if torch.isnan(sol.solution).any():
         #     print("Solution contains nan")
         #     import pdb; pdb.set_trace()
-        
+
         return torch.linalg.lstsq(AtA, Atb).solution.squeeze(2)

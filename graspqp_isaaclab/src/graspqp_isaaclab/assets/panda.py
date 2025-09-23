@@ -1,9 +1,9 @@
 import os
 
 import isaaclab.sim as sim_utils
+from graspqp_isaaclab.models.hand_model_cfg import HandModelCfg
 from isaaclab.actuators.actuator_cfg import ImplicitActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
-from graspqp_isaaclab.models.hand_model_cfg import HandModelCfg
 
 ##
 # Configuration

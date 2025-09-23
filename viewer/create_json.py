@@ -1,5 +1,5 @@
-import os
 import json
+import os
 
 objects = os.listdir("_vis/objects")
 energy = "12_contacts/span_overall_cone_sqp_default_longer_gendex"

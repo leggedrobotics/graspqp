@@ -9,9 +9,8 @@ from __future__ import annotations
 
 from dataclasses import MISSING
 
-from pxr import Usd
-
 from isaaclab.utils import configclass
+from pxr import Usd
 
 from .randomizations import randomize_joint_offset, randomize_scale
 
