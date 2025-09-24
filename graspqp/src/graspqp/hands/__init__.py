@@ -10,7 +10,6 @@ from .robotiq2 import getHandModel as getRobotiq2HandModel
 from .robotiq3 import getHandModel as getRobotiq3HandModel
 from .schunk import getHandModel as getSchunkHandModel
 from .shadow import getHandModel as getShadowHandModel
-from .xhand import getHandModel as getXHandModel
 
 _REGISTRY = {
     "robotiq3": getRobotiq3HandModel,
@@ -19,7 +18,6 @@ _REGISTRY = {
     "ability_hand": getAbilityHandModel,
     "shadow_hand": getShadowHandModel,
     "robotiq2": getRobotiq2HandModel,
-    "xhand": getXHandModel,
     "schunk2": getSchunkHandModel,
 }
 

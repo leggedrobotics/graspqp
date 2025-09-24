@@ -21,7 +21,7 @@ def calculate_jacobian(joint_angles: torch.Tensor, hand_model):
 
 def getHandModel(device: str, asset_dir: str, **kwargs) -> HandModel:
     params = dict(
-        mjcf_path=f"{asset_dir}/robotiq2/ROBOTIQ_2F_CFG140.urdf",
+        mjcf_path=f"{asset_dir}/robotiq2/robotiq_2f140.urdf",
         mesh_path=f"{asset_dir}/robotiq2/meshes",
         contact_points_path=f"{asset_dir}/robotiq2/contact_points.json",
         penetration_points_path=f"{asset_dir}/robotiq2/penetration_points.json",
