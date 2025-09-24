@@ -24,16 +24,11 @@ GraspQP synthesizes diverse, robust dexterous grasps by optimizing a differentia
 
 ## Method overview
 
-- Differentiable force-closure energy via QP (qpth) with friction-cone approximations
+- Differentiable force-closure energy via QP (qpth) with friction-cone approximations.
+- Distribution aware MALA\* optimizer.
 - SDF-based contact modeling; backends: TorchSDF (default), Warp, Kaolin (select with `SDF_BACKEND`)
 - Hand kinematics and Jacobians via pytorch_kinematics; analytic Jacobians for select grippers
 - Isaac Lab integration for batched evaluation and visualization
-
-## Results (high level)
-
-- Diverse grasp types (pinch, tri-finger precision, power)
-- Robust to contact noise and geometry variation
-- Scales to large simulation batches for evaluation
 
 ---
 
@@ -55,11 +50,11 @@ cd graspqp
 
 # Create an environment (choose one)
 # (A) venv
-python -m venv .venv
-source .venv/bin/activate
+# python -m venv .venv
+# source .venv/bin/activate
 # (B) conda
-# conda create -n graspqp python=3.10
-# conda activate graspqp
+conda create -n graspqp python=3.11
+conda activate graspqp
 
 # Install GraspQP and dependencies
 cd graspqp  # enter the package folder containing pyproject.toml
