@@ -63,6 +63,7 @@ class AnnealingDexGraspNet:
         self.old_global_rotation = None
         self.old_current_status = None
         self.old_contact_points = None
+        self.old_contact_normals = None
         self.old_grad_hand_pose = None
         self.ema_grad_hand_pose = torch.zeros(self.hand_model.n_dofs + 9, dtype=torch.float, device=device)
 
@@ -262,6 +263,7 @@ class MalaStar:
         self.old_global_rotation = self.hand_model.global_rotation
         self.old_current_status = self.hand_model.current_status
         self.old_contact_points = self.hand_model.contact_points
+        self.old_contact_normals = self.hand_model.contact_normals
 
         self.old_grad_hand_pose = self.hand_model.hand_pose.grad
         self.hand_model.set_parameters(hand_pose, contact_point_indices)
@@ -281,6 +283,7 @@ class MalaStar:
         self.old_global_transformation[mask] = self.hand_model.global_translation[mask]
         self.old_global_rotation[mask] = self.hand_model.global_rotation[mask]
         self.old_contact_points[mask] = self.hand_model.contact_points[mask]
+        self.old_contact_normals[mask] = self.hand_model.contact_normals[mask]
         self.old_grad_hand_pose[mask] = 0 * self.old_grad_hand_pose[mask]
 
         if self.old_old_grad_hand_pose is not None:
@@ -330,6 +333,7 @@ class MalaStar:
             self.hand_model.global_rotation[reject] = self.old_global_rotation[reject]
             self.hand_model.current_status = self.hand_model.fk(self.hand_model.hand_pose[:, 9:])
             self.hand_model.contact_points[reject] = self.old_contact_points[reject]
+            self.hand_model.contact_normals[reject] = self.old_contact_normals[reject]
 
             if self.old_grad_hand_pose is not None and self.hand_model.hand_pose.grad is not None:
                 if self.old_old_grad_hand_pose is not None:
