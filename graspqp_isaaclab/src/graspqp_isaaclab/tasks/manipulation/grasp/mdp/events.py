@@ -1,3 +1,5 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+#
 # # Copyright (c) 2022-2024, The Isaac Lab Project Developers.
 # # All rights reserved.
 # #
@@ -15,6 +17,30 @@ from isaaclab.assets import Articulation, RigidObject
 from isaaclab.envs import ManagerBasedEnv
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils.math import quat_apply, quat_inv
+
+
+def pull_drawer(
+    env: ManagerBasedEnv,
+    env_ids: torch.Tensor | None,
+    max_force: float = 5.0,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("obj"),
+):
+    """Pull the handle open with a POSITION TARGET on its rail drive.
+
+    The handle's rail joints (qx/qy/q1) have a stiffness=100 drive, so a far-away position target
+    makes the drive pull the handle at a force capped by ``max_force`` (the joint effort limit).
+    We set the effort limit to ``max_force`` and command a large negative target; qx/qy are clamped
+    to +/-2 cm so effective motion is along q1. (Matches the reference GraspMining implementation;
+    the [n,1] tensors broadcast across the handle's joints.)
+    """
+    if env_ids is None or len(env_ids) == 0:
+        return None
+
+    obj: Articulation = env.scene[asset_cfg.name]
+    obj.write_joint_effort_limit_to_sim(
+        torch.ones(len(env_ids), 1, device=env_ids.device) * max_force, env_ids=env_ids
+    )
+    obj.set_joint_position_target(-torch.ones(len(env_ids), 1, device=env_ids.device) * 100, env_ids=env_ids)
 
 
 def reset_state(
@@ -40,10 +66,10 @@ def reset_state(
     )
 
     if isinstance(asset, Articulation):  # TODO move to base class
-        asset.set_joint_position_target(torch.zeros(len(env_ids), 1, device=env_ids.device), env_ids=env_ids)
+        asset.set_joint_position_target(torch.zeros(len(env_ids), 3, device=env_ids.device), env_ids=env_ids)
         asset.write_joint_state_to_sim(
-            torch.zeros(len(env_ids), 1, device=env_ids.device),
-            torch.zeros(len(env_ids), 1, device=env_ids.device),
+            torch.zeros(len(env_ids), 3, device=env_ids.device),
+            torch.zeros(len(env_ids), 3, device=env_ids.device),
             env_ids=env_ids,
         )
 
@@ -56,6 +82,7 @@ def pull_object(
     asset_cfg: SceneEntityCfg = SceneEntityCfg("obj"),
 ) -> torch.Tensor | None:
     obj = env.scene[asset_cfg.name]
+    # print("Pulling object in direction:", direction, "with force:", max_force, "envs:", env_ids)
 
     if direction == "random":
         direction = torch.rand(3, device=obj.device)

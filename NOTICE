@@ -1,0 +1,90 @@
+GraspQP
+Copyright (c) 2025 ETH Zurich, René Zurbrügg
+
+This product is released under the MIT License (see the LICENSE file), with the
+exceptions and third-party components listed below.
+
+================================================================================
+1. License split
+================================================================================
+Except where noted, all source files in this repository are licensed under the
+MIT License and are copyright ETH Zurich (see LICENSE and AUTHORS).
+
+Files derived from the NVIDIA Isaac Lab project retain their original
+BSD-3-Clause license and copyright ("The Isaac Lab Project Developers"). The
+ETH Zurich copyright line added at the top of those files does not change their
+BSD-3-Clause license. The full BSD-3-Clause text is reproduced in Section 4.
+
+Portions of the grasp-optimization code (graspqp/src/graspqp/core/*.py and
+scripts/fit.py, scripts/vis/visualize_hand_model.py) are derived from
+DexGraspNet (https://github.com/PKU-EPIC/DexGraspNet), MIT License,
+Copyright (c) 2023 Jialiang Zhang, Ruicheng Wang.
+
+================================================================================
+2. Third-party dependencies (installed at build/run time, not redistributed here)
+================================================================================
+These are pulled in via pip / the Docker images and remain under their own
+licenses; consult each project for the authoritative terms:
+
+- pytorch_kinematics  - https://github.com/renezurbruegg/pytorch_kinematics (MIT)
+- TorchSDF (optional) - https://github.com/renezurbruegg/TorchSDF
+- NVIDIA Warp (warp-lang)          - NVIDIA
+- PyTorch3D (optional)             - Meta Platforms, BSD-3-Clause
+- NVIDIA Kaolin (optional backend) - NVIDIA
+- qpth                             - Apache-2.0
+- NVIDIA Isaac Sim / Isaac Lab (required only for the graspqp_isaaclab
+  simulation package): use requires accepting NVIDIA's Omniverse / Isaac Sim
+  license (e.g. ACCEPT_EULA=Y). Isaac Sim is NOT redistributed in this
+  repository.
+
+The interactive HTML viewer (viewer/test.html) links to JavaScript libraries
+from public CDNs via <script src="..."> tags. Those libraries are loaded at
+runtime from the CDN and are not redistributed in this repository.
+
+================================================================================
+3. Robot models and object assets
+================================================================================
+Robot hand / gripper models bundled under graspqp/assets/ and
+graspqp_isaaclab/src/graspqp_isaaclab/assets/ (Allegro Hand, Shadow Hand,
+Ability Hand, Robotiq 2F / 3F, Franka Panda, Schunk 2F) are the property of
+their respective manufacturers / original authors and are included solely for
+research reproducibility under their own terms. They are NOT covered by this
+repository's MIT License.
+
+The bundled test object (graspqp/tests/assets/dummy_sphere) is a procedurally
+generated primitive and is covered by this repository's MIT License.
+
+Object datasets used for grasp synthesis and evaluation are downloaded
+separately by the user and are the property of their respective owners; they
+are not part of this repository.
+
+================================================================================
+4. BSD-3-Clause License (NVIDIA Isaac Lab derived files)
+================================================================================
+Copyright (c) 2022-2025, The Isaac Lab Project Developers.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its contributors
+   may be used to endorse or promote products derived from this software
+   without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.

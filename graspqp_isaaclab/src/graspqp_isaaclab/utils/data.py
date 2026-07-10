@@ -1,3 +1,6 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+
 """
 Data loading and processing utilities for grasp datasets.
 
@@ -24,7 +27,7 @@ from transforms3d.euler import euler2mat
 
 def load_dexgrasp_poses(
     articulation: Articulation,
-    path: str = "/home/zrene/git/DexGraspNet/data/experiments/exp_2/results/2024-07-23_17-34-11/00316047.npy",
+    path: str = "/path/to/DexGraspNet/data/experiments/exp_2/results/2024-07-23_17-34-11/00316047.npy",
     e_fc_threshold=1e9,
     translation_names=["WRJTx", "WRJTy", "WRJTz"],
     rot_names=["WRJRx", "WRJRy", "WRJRz"],
@@ -74,7 +77,9 @@ def load_dexgrasp_poses(
         # Convert Euler angles to rotation matrix, then to quaternion
         rot = torch.from_numpy(np.array(euler2mat(*[qpos[name] for name in rot_names])))
         rot_quat = quat_from_matrix(rot)
-        position = torch.tensor([qpos[name] for name in translation_names], dtype=torch.float, device="cpu").unsqueeze(0)
+        position = torch.tensor([qpos[name] for name in translation_names], dtype=torch.float, device="cpu").unsqueeze(
+            0
+        )
 
         # Combine position and orientation into 7DOF pose
         pose = torch.cat([position, rot_quat.unsqueeze(0)], dim=-1)
@@ -102,7 +107,9 @@ def load_dexgrasp_poses(
     return poses, joint_positions, scales
 
 
-def get_saved_poses(file, articulation: Articulation, num_grasps=3, energy_th=-1e3):
+def get_saved_poses(
+    file, articulation: Articulation, num_grasps=3, energy_th=-1e3, sort=False, load_closed_params=False
+):
     """
     Load grasp poses from saved PyTorch files.
 
@@ -129,10 +136,21 @@ def get_saved_poses(file, articulation: Articulation, num_grasps=3, energy_th=-1
     """
 
     data = torch.load(file, weights_only=False)
-    parameters = data["parameters"]  # n_grasps x (3 + 4 + 6)
+    if load_closed_params:
+        if "closed_parameters" in data:
+            parameters = data["closed_parameters"]  # n_grasps x (3 + 4 + 6)
+        else:
+            raise ValueError("No closed_parameters found in the saved data.")
+            parameters = data["parameters"]
+    else:
+        parameters = data["parameters"]  # n_grasps x (3 + 4 + 6)
 
     values = []
     for joint_name in articulation.cfg.actuated_joints_expr:
+        if joint_name not in parameters:
+            raise ValueError(
+                f"Joint name {joint_name} not found in saved parameters. Available keys: {list(parameters.keys())}"
+            )
         values.append(parameters[joint_name].cpu())
     values = torch.stack(values, dim=-1)
     parameters = torch.cat([parameters["root_pose"].cpu(), values], dim=-1)
@@ -154,12 +172,29 @@ def get_saved_poses(file, articulation: Articulation, num_grasps=3, energy_th=-1
     mask = energies > energy_th
     parameters = parameters[mask]
     energies = energies[mask]
-    _, sorted_indices = torch.sort(energies, descending=False)
-    parameters = parameters[sorted_indices]
-    energies = energies[sorted_indices]
+    velocities = velocities[mask]
+    if sort:
+        _, sorted_indices = torch.sort(energies, descending=False)
+        parameters = parameters[sorted_indices]
+        energies = energies[sorted_indices]
+        velocities = velocities[sorted_indices]
 
     hand_poses = parameters[:, :7]
     joint_positions = parameters[:, 7:]
+
+    # Honor the frame the saved root_pose is expressed in. graspqp seeds are authored in the
+    # hand's optimization frame (e.g. a "grasp_frame"); the articulation is placed by writing
+    # to its root body, so grasp-frame poses must be converted to the root frame first (else the
+    # gripper is offset by the root->grasp_frame distance -- the "floating grasp" bug). Mined/eval
+    # outputs are tagged "gripper_root" and legacy files have no tag => both pass through unchanged.
+    source_frame = data.get("root_frame", None)
+    if hasattr(articulation, "to_articulation_root_pose"):
+        hand_poses = articulation.to_articulation_root_pose(hand_poses, source_frame)
+    elif source_frame not in (None, "gripper_root", "root", "base"):
+        print(
+            f"[get_saved_poses] WARNING: '{file}' is tagged root_frame='{source_frame}' but the "
+            f"articulation is not a HandModel; placing poses unchanged (assuming gripper root)."
+        )
 
     num_grasps = num_grasps if num_grasps > 0 else len(energies)
     return (
@@ -170,7 +205,7 @@ def get_saved_poses(file, articulation: Articulation, num_grasps=3, energy_th=-1
     )
 
 
-def load_grasp_poses(path, num_grasps, articulation: Articulation):
+def load_grasp_poses(path, num_grasps, articulation: Articulation, load_closed_params=False):
     """
     Universal grasp pose loader supporting multiple file formats.
 
@@ -190,7 +225,9 @@ def load_grasp_poses(path, num_grasps, articulation: Articulation):
         can be added by extending the format detection logic.
     """
     if path.endswith(".pt"):
-        return get_saved_poses(path, num_grasps=num_grasps, articulation=articulation)
+        return get_saved_poses(
+            path, num_grasps=num_grasps, articulation=articulation, load_closed_params=load_closed_params
+        )
     else:
         raise NotImplementedError("Only .pt files are supported for now.")
 
@@ -205,6 +242,7 @@ def resolve_assets(
     use_fps=False,
     collapse_grippers=False,
     colorize=True,
+    load_closed_params=False,
 ):
     """
     Resolve assets and grasp data for simulation setup.
@@ -267,15 +305,17 @@ def resolve_assets(
     poses, joint_positions, energies, velocities = [], [], [], []
 
     for grasp_path in grasp_paths:
+        print("Requesting grasps: Max ", max_grasps, " Num:", num_grasps, "min:", min(max_grasps, num_grasps))
+        
         pose, joints, vel, energy = load_grasp_poses(
             grasp_path,
             num_grasps=min(max_grasps, num_grasps),
             articulation=articulation,
+            load_closed_params=load_closed_params,
         )
 
         if use_fps and num_grasps > 1:
-            from pytorch3d.ops.sample_farthest_points import \
-                sample_farthest_points
+            from pytorch3d.ops.sample_farthest_points import sample_farthest_points
 
             # Reduce to num_grasps using fps
             top_poses = pose[: 3 * num_grasps]
@@ -292,10 +332,17 @@ def resolve_assets(
             joints = torch.cat([joints] * n_repeat, dim=0)
             vel = torch.cat([vel] * n_repeat, dim=0)
             energy = torch.cat([energy] * n_repeat, dim=0)
-
-        poses.append(pose[:num_grasps])
-        joint_positions.append(joints[:num_grasps])
-        energies.append(energy[:num_grasps])
-        velocities.append(vel[:num_grasps])
+            
+        if num_grasps > 0:
+            poses.append(pose[:num_grasps])
+            joint_positions.append(joints[:num_grasps])
+            energies.append(energy[:num_grasps])
+            velocities.append(vel[:num_grasps])
+        else:
+            num_grasps = len(pose)
+            poses.append(pose[:num_grasps])
+            joint_positions.append(joints[:num_grasps])
+            energies.append(energy[:num_grasps])
+            velocities.append(vel[:num_grasps])
 
     return (poses, joint_positions, velocities, energies), asset_cfgs

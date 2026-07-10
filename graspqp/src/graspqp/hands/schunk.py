@@ -1,3 +1,6 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+
 """Schunk EGU-50 two-finger gripper hand model implementation.
 
 This module provides the kinematic and jacobian calculations for the Schunk EGU-50
@@ -69,6 +72,22 @@ def calculate_jacobian(joint_angles: torch.Tensor, hand_model):
 
 
 def getHandModel(device: str, asset_dir: str, **kwargs) -> HandModel:
+    """Build the Schunk EGU-50 two-finger parallel gripper model.
+
+    Loads the Schunk gripper URDF, meshes and contact/penetration point definitions and
+    registers the symmetric forward-kinematics and Jacobian callbacks driven by the
+    single prismatic joint ``egu_50_prismatic_1``.
+
+    Args:
+        device: Torch device for the model tensors (e.g. ``"cuda"``).
+        asset_dir: Root assets directory; hand files are read from
+            ``{asset_dir}/schunk_2f``.
+        **kwargs: Additional :class:`~graspqp.core.HandModel` arguments that override
+            the defaults set here.
+
+    Returns:
+        HandModel: The configured Schunk EGU-50 gripper model.
+    """
     params = dict(
         mjcf_path=f"{asset_dir}/schunk_2f/schunk.urdf",
         mesh_path=f"{asset_dir}/schunk_2f/meshes",

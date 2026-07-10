@@ -1,3 +1,6 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+
 import torch
 from theseus.optimizer.linear.dense_solver import (Any, DenseLinearization,
                                                    DenseSolver, Dict,

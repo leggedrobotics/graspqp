@@ -1,3 +1,6 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+
 import math
 import os
 
@@ -88,6 +91,6 @@ ROBOTIQ_2F_CFG = HandModelCfg(
         },
     },
     init_fnc=cal_joint_pos,
-    hand_model_name="robotiq2f",
+    hand_model_name="robotiq2",
 )
 """Configuration of Robotiq 2F robot."""

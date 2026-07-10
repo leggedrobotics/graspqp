@@ -1,3 +1,16 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+
+"""DexGraspNet force-closure energy (``E_fc``).
+
+Implements the differentiable force-closure metric used by DexGraspNet: it builds the
+grasp matrix ``G`` mapping per-contact forces to a 6D wrench and returns the squared
+norm of ``n^T G`` (the residual net wrench of the unit contact normals). A lower value
+indicates a grasp closer to force closure. Exposed through
+:class:`DexgraspSpanMetric` and selected via
+``GraspSpanMetricFactory.MetricType.DEXGRASP``.
+"""
+
 import torch
 
 

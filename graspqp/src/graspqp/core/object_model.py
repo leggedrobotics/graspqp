@@ -1,4 +1,18 @@
-"""
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+#
+# Portions derived from DexGraspNet (https://github.com/PKU-EPIC/DexGraspNet),
+# MIT License, Copyright (c) 2023 Jialiang Zhang, Ruicheng Wang.
+
+"""Object representation used during grasp optimization.
+
+Defines :class:`ObjectModel`, which loads one or more object meshes, samples a
+farthest-point surface point cloud for each, and builds a signed distance field
+(SDF) with a selectable backend (WARP / TorchSDF / Kaolin, chosen via the
+``SDF_BACKEND`` environment variable). The SDF query :meth:`ObjectModel.cal_distance`
+is differentiable w.r.t. the query points, letting the contact/penetration
+energies pull the hand onto the object surface.
+
 Based on Dexgraspnet: https://pku-epic.github.io/DexGraspNet/
 """
 
@@ -7,12 +21,21 @@ import glob
 import os
 
 import numpy as np
-import pytorch3d.ops
-import pytorch3d.structures
 import torch
+
+from .pytorch3d_compat import Meshes, sample_farthest_points, sample_points_from_meshes
 import trimesh as tm
 
-SDF_BACKEND = os.environ.get("SDF_BACKEND", "TORCHSDF").upper()
+# Try to import pytorch3d, but make it optional
+try:
+    import pytorch3d.ops
+    import pytorch3d.structures
+
+    PYTORCH3D_AVAILABLE = True
+except ImportError:
+    PYTORCH3D_AVAILABLE = False
+
+SDF_BACKEND = os.environ.get("SDF_BACKEND", "WARP").upper()
 
 if SDF_BACKEND == "TORCHSDF":
     from torchsdf import compute_sdf, index_vertices_by_faces
@@ -30,20 +53,38 @@ import time
 
 
 class ObjectModel:
-    def __init__(self, data_root_path, batch_size_each, scale=1.0, num_samples=2000, device="cuda"):
-        """
-        Create a Object Model
+    """Batched object meshes with a differentiable signed distance field.
 
-        Parameters
-        ----------
-        data_root_path: str
-            directory to object meshes
-        batch_size_each: int
-            batch size for each objects
-        num_samples: int
-            numbers of object surface points, sampled with fps
-        device: str | torch.Device
-            device for torch tensors
+    Holds a list of object meshes (one entry per object code), each replicated
+    ``batch_size_each`` times so a batch of grasps can be optimized against the
+    same object in parallel. After :meth:`initialize`, exposes the sampled
+    surface point cloud (``surface_points_tensor``), per-object scales
+    (``object_scale_tensor``) and the SDF query :meth:`cal_distance`.
+
+    Attributes:
+        device: Torch device holding the tensors.
+        batch_size_each (int): Number of grasps optimized per object.
+        num_samples (int): Number of surface points sampled per object.
+        sdf_library (str): Active SDF backend (``"WARP"``, ``"TORCHSDF"`` or
+            ``"KAOLIN"``).
+        object_scale_tensor (torch.Tensor): ``(n_objects, batch_size_each)``
+            per-grasp object scales.
+        surface_points_tensor (torch.Tensor): ``(n_objects * batch_size_each,
+            num_samples, 3)`` sampled surface points.
+    """
+
+    def __init__(self, data_root_path, batch_size_each, scale=1.0, num_samples=2000, device="cuda"):
+        """Create an object model (meshes are loaded later in :meth:`initialize`).
+
+        Args:
+            data_root_path (str): Root directory containing per-object mesh
+                folders.
+            batch_size_each (int): Batch size (number of grasps) per object.
+            scale (float): Global scale factor applied to every loaded mesh's
+                vertices (in meters).
+            num_samples (int): Number of object surface points to sample with
+                farthest-point sampling. If 0, surface sampling is skipped.
+            device (str | torch.device): Device for the torch tensors.
         """
 
         self.device = device
@@ -59,28 +100,61 @@ class ObjectModel:
         # self.scale_choice = torch.tensor([0.06, 0.08, 0.1, 0.12, 0.15], dtype=torch.float, device=self.device)u
         self.scale_choice = torch.tensor([1.0], dtype=torch.float, device=self.device)
         self.sdf_library = SDF_BACKEND
+        # Build WARP meshes with generalized-winding-number support and resolve inside/outside with
+        # it (robust for non-watertight / inconsistently-wound meshes). Off by default (faster BVH,
+        # pseudo-normal sign). Set via ``initialize(use_winding_number=True)``.
+        self.use_winding_number = False
         self._cog = None
 
     @property
     def cog(self):
+        """torch.Tensor: ``(n_objects * batch_size_each, 3)`` centroid of each
+        object's sampled surface points, computed lazily and cached."""
         if self._cog is None:
             self._cog = self.surface_points_tensor.mean(dim=1)
         return self._cog
 
     def initialize(
-        self, object_code_list, sdf_library=SDF_BACKEND, resample_with_fps=True, extension=".obj", convention=None
+        self,
+        object_code_list,
+        sdf_library=SDF_BACKEND,
+        resample_with_fps=True,
+        extension=".obj",
+        convention=None,
+        use_winding_number=False,
     ):
-        """
-        Initialize Object Model with list of objects
+        """Load meshes, choose per-grasp scales and sample surface points.
 
-        Choose scales, load meshes, sample surface points
+        Populates ``object_mesh_list``, ``object_scale_tensor``,
+        ``object_face_verts_list`` (the backend-specific SDF acceleration
+        structure) and ``surface_points_tensor``.
 
-        Parameters
-        ----------
-        object_code_list: list | str
-            list of object codes
+        Args:
+            object_code_list (list[str] | str): Object code(s) naming
+                subdirectories under ``data_root_path``. A bare string is
+                promoted to a single-element list.
+            sdf_library (str): SDF backend to build, one of ``"WARP"``,
+                ``"TORCHSDF"`` or ``"KAOLIN"``. Defaults to the module-level
+                ``SDF_BACKEND``.
+            resample_with_fps (bool): Kept for API compatibility (surface
+                sampling always uses farthest-point sampling).
+            extension (str): Mesh file extension to search for when the default
+                ``coacd`` mesh paths are absent.
+            convention (str | None): Up-axis convention of the source meshes.
+                ``"y-up"`` remaps axes to z-up; ``"z-up"`` (or None) leaves them
+                unchanged.
+            use_winding_number (bool): WARP backend only. Build the meshes with
+                generalized-winding-number support and use it to resolve
+                inside/outside in the SDF query -- robust for meshes that are
+                not perfectly watertight / consistently wound. Off by default
+                (faster BVH build, pseudo-normal sign).
+
+        Raises:
+            ValueError: If an object mesh cannot be found, has too few vertices,
+                or ``convention`` is unrecognized.
         """
         self.sdf_library = sdf_library.upper()
+        self.use_winding_number = use_winding_number
         if not isinstance(object_code_list, list):
             object_code_list = [object_code_list]
         self.object_code_list = object_code_list
@@ -107,8 +181,8 @@ class ObjectModel:
                 if len(remeshed_meshes) == 1:
                     mesh_path = remeshed_meshes[0]
                 else:
-                    # if len(meshes) == 0:
-                    #     raise ValueError(f"Object {object_code} not found")
+                    if len(meshes) == 0:
+                        raise ValueError(f"Object {object_code} not found")
                     if len(meshes) > 1:
                         print("Warning: multiple meshes found, using the first one. Please check the data.")
                     mesh_path = meshes[0]
@@ -153,7 +227,7 @@ class ObjectModel:
                 faces_wp = wp.from_numpy(
                     np.ascontiguousarray(link_faces.flatten()), device=str(self.device), dtype=wp.int32
                 )
-                wp_mesh = wp.Mesh(points=verts_wp, indices=faces_wp)
+                wp_mesh = wp.Mesh(points=verts_wp, indices=faces_wp, support_winding_number=self.use_winding_number)
 
                 self.object_face_verts_list.append(wp_mesh)
             elif self.sdf_library == "KAOLIN":
@@ -163,18 +237,13 @@ class ObjectModel:
             if self.num_samples != 0:
                 vertices = torch.tensor(self.object_mesh_list[-1].vertices, dtype=torch.float, device=self.device)
                 faces = torch.tensor(self.object_mesh_list[-1].faces, dtype=torch.float, device=self.device)
-                mesh = pytorch3d.structures.Meshes(vertices.unsqueeze(0), faces.unsqueeze(0))
+                mesh = Meshes(vertices.unsqueeze(0), faces.unsqueeze(0))
 
-                dense_point_cloud = pytorch3d.ops.sample_points_from_meshes(mesh, num_samples=100 * self.num_samples)
+                dense_point_cloud = sample_points_from_meshes(mesh, num_samples=100 * self.num_samples)
 
-                if resample_with_fps:
-                    surface_points = pytorch3d.ops.sample_farthest_points(dense_point_cloud, K=self.num_samples)[0][0]
-                else:
-                    # sample random points
-                    surface_points = dense_point_cloud[0].clone()
-                    surface_points = surface_points[torch.randint(0, surface_points.shape[0], (self.num_samples,))]
+                surface_points = sample_farthest_points(dense_point_cloud, K=self.num_samples)[0][0]
 
-                surface_points.to(dtype=float, device=self.device)
+                surface_points = surface_points.to(dtype=torch.float, device=self.device)
                 self.surface_points_tensor.append(surface_points)
         self.object_scale_tensor = torch.stack(self.object_scale_tensor, dim=0)
 
@@ -184,28 +253,26 @@ class ObjectModel:
             )  # (n_objects * batch_size_each, num_samples, 3)
 
     def cal_distance(self, x, with_closest_points=False):
-        """
-        Calculate signed distances from hand contact points to object meshes and return contact normals
+        """Query the object SDF at a batch of points and return contact normals.
 
-        Interiors are positive, exteriors are negative
+        The distance sign convention is: interior points are positive, exterior
+        points are negative. The query is differentiable w.r.t. ``x`` so grasp
+        energies can backprop contact gradients through it. Points are divided
+        by the per-object scale before the query and the returned distances are
+        rescaled back to meters.
 
-        Use our modified Kaolin package
+        Args:
+            x (torch.Tensor): ``(B, n_contact, 3)`` hand contact points in the
+                object frame (meters). ``B`` must be ``n_objects * batch_size_each``.
+            with_closest_points (bool): If True, also return the closest points
+                on the object meshes.
 
-        Parameters
-        ----------
-        x: (B, `n_contact`, 3) torch.Tensor
-            hand contact points
-        with_closest_points: bool
-            whether to return closest points on object meshes
-
-        Returns
-        -------
-        distance: (B, `n_contact`) torch.Tensor
-            signed distances from hand contact points to object meshes, inside is positive
-        normals: (B, `n_contact`, 3) torch.Tensor
-            contact normal vectors defined by gradient
-        closest_points: (B, `n_contact`, 3) torch.Tensor
-            contact points on object meshes, returned only when `with_closest_points is True`
+        Returns:
+            tuple: ``(distance, normals)`` with shapes ``(B, n_contact)`` and
+            ``(B, n_contact, 3)`` -- signed distances (inside positive) and the
+            outward contact normal at each point. When ``with_closest_points``
+            is True, a third tensor ``closest_points`` of shape
+            ``(B, n_contact, 3)`` is appended.
         """
         _, n_points, _ = x.shape
         x = x.reshape(-1, self.batch_size_each * n_points, 3)
@@ -220,22 +287,38 @@ class ObjectModel:
                 dis, dis_signs, normal, _ = compute_sdf(x[i], face_verts)
             elif self.sdf_library == "WARP":
                 mesh = self.object_face_verts_list[i]
-                pts = wp.from_torch(x[i], dtype=wp.vec3)
-                distance_wp, normal_wp = wp_utils.calc_sdf_field(points_wp=pts, mesh_id=mesh.id)
-                dis_local = wp.to_torch(distance_wp)
+                # Differentiable w.r.t. the query points x[i]. The bare calc_sdf_field crossed the
+                # torch<->warp boundary with no autograd hook, so the hand contact points received
+                # NO gradient from the object SDF (force-closure / contact energies couldn't pull
+                # the hand onto the surface). CalcSdfField supplies d(sdf)/dx = outward normal.
+                dis_local, normal = wp_utils.CalcSdfField.apply(x[i], mesh.id, 1e6, self.use_winding_number)
                 dis_signs = torch.where(dis_local > 0, 1, -1)
                 dis = dis_local**2
-                normal = wp.to_torch(normal_wp)
             else:
                 # dis_local, dis_signs, _, _ = compute_sdf(x_local, face_verts)
                 (face_verts, face_indexes, verts) = self.object_face_verts_list[i]
-                dis, _, _ = kaolin.metrics.trianglemesh.point_to_mesh_distance(x[i].unsqueeze(0), face_verts)
-                dis_signs = kaolin.ops.mesh.check_sign(verts.unsqueeze(0), face_indexes, x[i].unsqueeze(0))
+                # capture the closest-face index (was discarded) to build the contact normal.
+                # kaolin returns a leading batch dim (1, M); the downstream (and the WARP/TORCHSDF
+                # branches) work on (M, ...), so squeeze it off to keep shapes consistent -- the
+                # original KAOLIN branch was shape-broken too, not just missing `normal`.
+                dis, closest_face_idx, _ = kaolin.metrics.trianglemesh.point_to_mesh_distance(
+                    x[i].unsqueeze(0), face_verts
+                )
+                dis = dis.squeeze(0)  # (M,)
+                closest_face_idx = closest_face_idx.squeeze(0).long()  # (M,)
+                dis_signs = kaolin.ops.mesh.check_sign(verts.unsqueeze(0), face_indexes, x[i].unsqueeze(0)).squeeze(0)
                 dis_signs = torch.where(
                     dis_signs,
                     -1 * torch.ones_like(dis_signs, dtype=torch.int32),
                     torch.ones_like(dis_signs, dtype=torch.int32),
                 )
+                # Outward face normal of the closest face -- the KAOLIN branch previously never set
+                # `normal`, so cal_distance raised UnboundLocalError. Matches the WARP branch's
+                # wp.mesh_eval_face_normal (same mesh winding); constant w.r.t. the query point.
+                cf = face_verts[0, closest_face_idx]  # (M, 3, 3)
+                normal = torch.nn.functional.normalize(
+                    torch.linalg.cross(cf[:, 1] - cf[:, 0], cf[:, 2] - cf[:, 0], dim=-1), dim=-1
+                )  # (M, 3)
 
             if with_closest_points:
                 closest_points.append(x[i] - dis.sqrt().unsqueeze(1) * normal)
@@ -249,6 +332,7 @@ class ObjectModel:
         distance = distance * scale
         distance = distance.reshape(-1, n_points)
         normals = normals.reshape(-1, n_points, 3)
+
         if with_closest_points:
             closest_points = (torch.stack(closest_points) * scale.unsqueeze(2)).reshape(-1, n_points, 3)
             return distance, normals, closest_points

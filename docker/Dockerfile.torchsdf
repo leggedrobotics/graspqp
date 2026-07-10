@@ -1,0 +1,50 @@
+# syntax=docker/dockerfile:1
+#
+# GraspQP -- full image (all SDF backends: WARP + TorchSDF + Kaolin).
+#
+# TorchSDF and pytorch3d are CUDA extensions built from source, so this image needs the CUDA
+# toolkit (nvcc) and therefore uses a *devel* base. Kaolin is pulled as a prebuilt wheel from
+# the NVIDIA index. Prefer the lightweight WARP-only image (docker/Dockerfile) unless you
+# specifically need the TorchSDF or Kaolin backends.
+#
+# Build (context = repo root):
+#   docker build -f docker/Dockerfile.torchsdf -t graspqp:full .
+# Run (pick a backend at runtime):
+#   docker run --rm --gpus all -e SDF_BACKEND=TORCHSDF -it graspqp:full   # or WARP / KAOLIN
+
+ARG PYTORCH_IMAGE=pytorch/pytorch:2.7.0-cuda12.8-cudnn9-devel
+FROM ${PYTORCH_IMAGE}
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    SDF_BACKEND=WARP \
+    # Force CUDA kernel compilation for TorchSDF / pytorch3d. No GPU is visible during
+    # `docker build`, so without this their setup.py fall back to a CPU-only build and the
+    # backends then raise "not built with CUDA" at runtime.
+    FORCE_CUDA=1 \
+    # GPU architectures to compile the CUDA extensions for (Volta -> Hopper). Override to match
+    # your GPU to cut build time, e.g. "8.9+PTX" for a single Ada card.
+    TORCH_CUDA_ARCH_LIST="7.0 7.5 8.0 8.6 8.9 9.0+PTX"
+
+# build-essential + the devel base's nvcc are needed to compile TorchSDF / pytorch3d.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git build-essential libgl1 libglib2.0-0 && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace/graspqp
+COPY graspqp/ ./graspqp/
+COPY scripts/ ./scripts/
+
+# Full install: WARP + pytorch_kinematics (base) + viz/log/opt + the compiled backends
+# (TorchSDF, pytorch3d). nvcc from the devel base compiles the CUDA extensions.
+RUN pip install --no-cache-dir --no-build-isolation -e "./graspqp[full]"
+
+# Kaolin backend: prebuilt wheel matching this base's torch + CUDA. If you change PYTORCH_IMAGE,
+# update the torch/cu tag in the index URL to match (see https://kaolin.readthedocs.io install).
+RUN pip install --no-cache-dir kaolin \
+        -f https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.7.0_cu128.html || \
+    echo "WARN: no kaolin wheel for this torch/cuda; adjust the -f index URL or build from source."
+
+RUN python -c "import warp, graspqp; print('GraspQP full image (WARP + TorchSDF + Kaolin) ready')"
+
+CMD ["bash"]

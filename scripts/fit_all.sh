@@ -98,7 +98,7 @@ if [ -z "$PYTHON_EULER_ROOT" ]; then
     CLUSTER=0
 else
     echo "Running on cluster"
-    data_path="/cluster/scratch/zrene/data"
+    data_path="/path/to/data"
     CLUSTER=1
 fi
 

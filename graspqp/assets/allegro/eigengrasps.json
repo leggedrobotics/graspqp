@@ -56,5 +56,19 @@
     "thumb_link_3": {
       "n_points": 8
     }
+  },
+  "tips": {
+    "index_link_3": {
+      "n_points": 16
+    },
+    "middle_link_3": {
+      "n_points": 16
+    },
+    "ring_link_3": {
+      "n_points": 16
+    },
+    "thumb_link_3": {
+      "n_points": 16
+    }
   }
 }

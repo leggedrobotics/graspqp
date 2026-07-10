@@ -1,3 +1,6 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+
 from isaaclab.assets.rigid_object import RigidObjectCfg
 from isaaclab.utils import configclass
 

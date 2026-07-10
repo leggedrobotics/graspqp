@@ -1,13 +1,17 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+
 from typing import Callable
 
 from isaaclab.assets.articulation import ArticulationCfg
+from isaaclab.ui.components import ListComponentCfg
 from isaaclab.utils import configclass
 
 from .hand_model import HandModel
 
 
 @configclass
-class HandModelCfg(ArticulationCfg):
+class HandModelCfg(ArticulationCfg, ListComponentCfg):
     """Configuration parameters for a rigid object."""
 
     @configclass
@@ -20,12 +24,26 @@ class HandModelCfg(ArticulationCfg):
     class_type: type = HandModel
 
     hand_model_name: str = "MISSING"
+    
+    grasp_type: str = "default" 
 
     root_body: str | None = None
 
     contact_mode: str = "all"  # or random
 
+    forward_axis: tuple[float, float, float] = (0.0, 0.0, 1.0)
+    """Approach ("forward") axis of the gripper in the ee frame. Used by reg_gravity to keep
+    the forward axis perpendicular to gravity. Override per gripper config if needed."""
+
     surface_pts: int | None = None
+
+    entries: list[ListComponentCfg.ListEntryCfg] | None = [
+        ListComponentCfg.ListEntryCfg(name="contact_points", label="Contact Points", enabled=False),
+        ListComponentCfg.ListEntryCfg(name="contact_normals", label="Contact Normals", enabled=False),
+        ListComponentCfg.ListEntryCfg(name="surface_points", label="Surface Points", enabled=False),
+        ListComponentCfg.ListEntryCfg(name="collision_spheres", label="Collision Spheres", enabled=False),
+        ListComponentCfg.ListEntryCfg(name="projected_gravity", label="Projected Gravity", enabled=False),
+    ]
 
     @classmethod
     def from_articulation_cfg(cls, articulation_cfg: ArticulationCfg, **kwargs):

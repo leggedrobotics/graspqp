@@ -1,9 +1,28 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+
+"""Differentiable QP backend for the span metrics (``qpth``).
+
+Implements :class:`SQPLsqSolver`, a batched bounded least-squares / QP solver built on
+top of ``qpth``'s differentiable :class:`~qpth.qp.QPFunction`. It is the default backend
+selected by the GraspQP metrics; ``qpth`` is an optional dependency and importing this
+module without it will raise on instantiation.
+"""
+
 import torch
-from qpth.qp import QPFunction
+
+try:
+    from qpth.qp import QPFunction
+except ImportError:
+    QPFunction = None
 
 
 class SQPLsqSolver:
     def __init__(self, sum_to_one=False):
+        if QPFunction is None:
+            raise ImportError(
+                "qpth is required for SQPLsqSolver. Install it with: pip install qpth"
+            )
         self._sum_to_one = sum_to_one
         self._qp_function = QPFunction(verbose=False, maxIter=12, eps=5e-2)
 
@@ -53,6 +72,7 @@ class SQPLsqSolver:
         self._batch_size = batch_size
         self._device = device
         self._step_size = step_size
+        self._warned = False
 
     def __call__(self, A, b, **kwargs):
         return self.solve(A, b, **kwargs)
@@ -61,9 +81,10 @@ class SQPLsqSolver:
         """Solving ||A*X -B|| s.t. min_bound <= X <= max_bound"""
         # self._qp_function = QPFunction(verbose=True, eps = 1e-3, maxIter=5)
 
-        if len(kwargs) > 0:
+        if len(kwargs) > 0 and not self._warned:
             print("WARNING: Unknown kwargs passed to solver", SQPLsqSolver.__name__)
             print("These kwargs will be ignored:", kwargs.keys())
+            self._warned = True
 
         if init is None:
             init = torch.ones((self._batch_size, self._num_wrenches))
@@ -99,7 +120,7 @@ class SQPLsqSolver:
 
         # propare variables for sqp step
         Q = A.mT @ A
-        Q += torch.eye(self._num_wrenches, device=self._device).unsqueeze(0) * 1e-4
+        Q += torch.eye(self._num_wrenches, device=self._device).unsqueeze(0) * 1e-3
 
         p = (-A.mT @ (b[..., None])).squeeze(-1)
         G = torch.cat(
@@ -110,6 +131,10 @@ class SQPLsqSolver:
             dim=-2,
         )
         h = torch.cat([u, -l], dim=-1)
+        
+        # dump all data for debugging
+        # torch.save({            "Q": Q,            "p": p,            "G": G,            "h": h,            "A": A,            "b": b,            "l": l,            "u": u,        }, "qp_debug.pt")
+        # import pdb; pdb.set_trace()
 
         # Call the QP solver
 
@@ -123,6 +148,7 @@ class SQPLsqSolver:
             eq_value = torch.Tensor()
 
         x = self._qp_function(Q, p, G, h, eq_bound, eq_value)
+        
         value = 0.5 * torch.sum((b - (A @ x.unsqueeze(-1)).squeeze(-1)).pow(2), -1)
 
         x = x.view(*batch_shape, self._num_wrenches)

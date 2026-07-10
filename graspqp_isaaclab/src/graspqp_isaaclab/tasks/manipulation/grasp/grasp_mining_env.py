@@ -1,3 +1,5 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+#
 # Copyright (c) 2022-2024, The Isaac Lab Project Developers.
 # All rights reserved.
 #
@@ -10,8 +12,7 @@ import isaaclab.sim as sim_utils
 import torch
 from graspqp_isaaclab.tasks.manipulation.grasp import mdp
 from isaaclab.assets import Articulation, ArticulationCfg, AssetBaseCfg
-from isaaclab.assets.rigid_object.rigid_object_cfg import (RigidObject,
-                                                           RigidObjectCfg)
+from isaaclab.assets.rigid_object.rigid_object_cfg import RigidObject, RigidObjectCfg
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.managers import ActionTermCfg as ActionTerm
 from isaaclab.managers import EventTermCfg as EventTerm
@@ -113,9 +114,11 @@ def _pull_config(max_force, direction, start_time):
     return EventTerm(
         func=mdp.pull_object,
         mode="interval",
-        is_global_time=True,
+        is_global_time=False,
+        # ``is_single_shot`` was removed from EventTermCfg in current Isaac Lab. With a
+        # zero-width interval at ``start_time`` the pull is applied from start_time onward;
+        # episodes are short enough that this matches the original single-shot intent.
         interval_range_s=(start_time, start_time),
-        is_single_shot=True,
         params={
             "max_force": max_force,
             "direction": direction,
@@ -125,6 +128,14 @@ def _pull_config(max_force, direction, start_time):
 
 
 def reset_full_state(
+    env,
+    env_ids: torch.Tensor,
+):
+    reset_object(env, env_ids, SceneEntityCfg("obj", body_names=".*"))
+    reset_robot(env, env_ids, SceneEntityCfg("robot"))
+
+
+def reset_full_state_trig(
     env,
     env_ids: torch.Tensor,
 ):
@@ -222,9 +233,43 @@ class PullEventCfg:
     reset_everything = EventTerm(
         func=reset_full_state,
         mode="interval",
-        is_global_time=True,
+        is_global_time=False,
         interval_range_s=(1.5, 1.5),
     )
+    
+    # Somehow these are needed for physx to properly reset the state
+    reset_physx1 = EventTerm(
+        func=reset_full_state_trig,
+        mode="interval",
+        is_global_time=False,
+        interval_range_s=(0.1, 0.1),
+    )
+    reset_physx2 = EventTerm(
+        func=reset_full_state_trig,
+        mode="interval",
+        is_global_time=False,
+        interval_range_s=(0.05, 0.05),
+    )
+    reset_physx3 = EventTerm(
+        func=reset_full_state_trig,
+        mode="interval",
+        is_global_time=False,
+        interval_range_s=(0.025, 0.025),
+    )
+
+
+# return EventTerm(
+#     func=mdp.pull_object,
+#     mode="interval",
+#     is_global_time=False,
+#     interval_range_s=(start_time, start_time),
+#     is_single_shot=True,
+#     params={
+#         "max_force": max_force,
+#         "direction": direction,
+#         "asset_cfg": SceneEntityCfg("obj"),
+#     },
+# )
 
 
 ##
@@ -240,6 +285,7 @@ def object_com_error(env, asset_cfg: SceneEntityCfg = SceneEntityCfg("obj")) -> 
         return asset.data.joint_pos[..., 0].abs()
     else:
         com_error = (asset.data.body_pos_w[:, -1] - env.scene.env_origins).norm(dim=-1)
+        
     return com_error
 
 
@@ -247,7 +293,8 @@ def object_com_error_th(
     env, asset_cfg: SceneEntityCfg = SceneEntityCfg("obj"), threshold=0.1, reset_frequency: int = 5
 ) -> torch.Tensor:
     """Penalize xy-axis base angular velocity using L2-kernel."""
-    com_error = object_com_error(env, asset_cfg) > threshold
+    error = object_com_error(env, asset_cfg)
+    com_error = error > threshold
     hand_error = env.scene["robot"].data.root_pos_w[:, -1] > 1.0
     return torch.logical_or(com_error, hand_error) & (env.episode_length_buf % CHECK_INTERVAL == 0)
 
@@ -276,7 +323,7 @@ class TimeoutTerminationsCfg:
 class RewardsCfg:
     """Reward terms for the MDP."""
 
-    object_com_error = RewTerm(func=object_com_error_th, weight=-1.0, params={"threshold": 0.03})
+    object_com_error = RewTerm(func=object_com_error_th, weight=-1.0, params={"threshold": 0.05})
 
 
 @configclass
@@ -321,10 +368,13 @@ class GraspEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.physx.gpu_heap_capacity = 16 * 1024 * 1024 * 8
 
         # self.sim.physx.solver_type = 1
-        self.sim.physx.enable_ccd = True
+        self.sim.physx.enable_ccd = False
+        self.sim.physx.solver_type = 0  # 0: pgs, 1: tgs
         self.sim.physx.bounce_threshold_velocity = 0.1
         # self.sim.physx.enable_stabilization = False
         self.sim.physx.friction_correlation_distance = 0.005
+        self.sim.physx.enable_enhanced_determinism = True
+        self.sim.physx.enable_stabilization = False
 
         self.seed = 42
 

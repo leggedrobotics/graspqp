@@ -1,3 +1,20 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+
+"""Task-oriented Dexterous Grasp (TDG) / Grasp Wrench Space energy.
+
+Approximates the boundary of the Grasp Wrench Space (GWS) by densely sampling target
+wrench directions on the 6D sphere and, for each, evaluating the best contact-force
+support of the friction cones (``GWS``). The energy is the mean angular deviation
+between the reachable GWS boundary and the target directions, i.e. how well the grasp
+covers a task wrench set. Exposed through :class:`TDGSpanMetric` and selected via
+``GraspSpanMetricFactory.MetricType.TDG``.
+
+Note:
+    This module implements the analytical GWS/force-closure energy from the TDG line of
+    work; the soft-finger contact model is intentionally left unimplemented.
+"""
+
 from abc import abstractmethod
 from dataclasses import dataclass
 from typing import List
@@ -216,6 +233,17 @@ class TDGEnergy(GraspEnergyBase):
 
 
 class TDGSpanMetric(torch.nn.Module):
+    """``torch.nn.Module`` wrapper exposing the TDG/GWS energy as a grasp metric.
+
+    Configures a :class:`TDGEnergy` (friction ``mu = 0.2``, density weighting enabled)
+    and, on ``forward``, centers the contacts at the object CoG and returns the scaled
+    GWS energy. Output is scaled by 100 to roughly match the magnitude of the other
+    metrics.
+
+    Args:
+        device: Torch device on which the internal tensors are allocated.
+    """
+
     def __init__(self, device="cpu"):
         super().__init__()
 
@@ -232,6 +260,20 @@ class TDGSpanMetric(torch.nn.Module):
     def forward(
         self, contact_pts: torch.Tensor, contact_normals: torch.Tensor, cog, torque_weight=0.0, with_solution=False, **kwargs
     ):
+        """Compute the TDG/GWS grasp energy.
+
+        Args:
+            contact_pts: Contact points, shape ``(batch, n_contact, 3)`` in meters.
+            contact_normals: Contact normals, shape ``(batch, n_contact, 3)``.
+            cog: Object center of gravity, shape ``(batch, 3)`` in meters.
+            torque_weight: Unused; kept for signature compatibility with other metrics.
+            with_solution: Unused; kept for signature compatibility.
+            **kwargs: Ignored extra keyword arguments.
+
+        Returns:
+            tuple: ``(energy, None)`` where ``energy`` has shape ``(batch,)`` (scaled by
+            100). The second element is always ``None`` (no solver solution).
+        """
         contact_pts = contact_pts - cog.unsqueeze(1)
         energy = 100 * self.tdg_energy.forward(contact_pts, contact_normals).squeeze(
             -1

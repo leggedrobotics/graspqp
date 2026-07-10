@@ -1,3 +1,5 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+#
 # Copyright (c) 2022-2025, The Isaac Lab Project Developers.
 # All rights reserved.
 #
@@ -157,7 +159,7 @@ def calc_obj_distances(
     env_ids: torch.Tensor | None = None,
 ):
 
-    lookup_points_wp = wp.from_torch(lookup_points, dtype=wp.vec3)
+    lookup_points_wp = wp.from_torch(lookup_points.contiguous(), dtype=wp.vec3)
     distances_wp = wp.ones(
         [object_positions.shape[0], object_positions.shape[1], lookup_points.shape[1]],
         dtype=wp.float32,
@@ -168,9 +170,11 @@ def calc_obj_distances(
         dtype=wp.vec3,
         device=str(lookup_points.device),
     )
-    object_positions_wp = wp.from_torch(object_positions, dtype=wp.vec3)
+    object_positions_wp = wp.from_torch(object_positions.contiguous(), dtype=wp.vec3)
 
-    object_rotations = convert_quat(object_rotations.to(dtype=torch.float32, device=lookup_points.device), "xyzw").contiguous()
+    object_rotations = convert_quat(
+        object_rotations.to(dtype=torch.float32, device=lookup_points.device), "xyzw"
+    ).contiguous()
     object_rotations_wp = wp.from_torch(object_rotations, dtype=wp.quat)
 
     if env_ids is None:
@@ -203,7 +207,7 @@ def calc_obj_distances(
     return distances, normals
 
 
-def convert_to_warp_mesh(points: np.ndarray, indices: np.ndarray, device: str) -> wp.Mesh:
+def convert_to_warp_mesh(points: np.ndarray, indices: np.ndarray, device: str, support_winding_number=False) -> wp.Mesh:
     """Create a warp mesh object with a mesh defined from vertices and triangles.
 
     Args:
@@ -218,4 +222,5 @@ def convert_to_warp_mesh(points: np.ndarray, indices: np.ndarray, device: str) -
     return wp.Mesh(
         points=wp.array(points.astype(np.float32), dtype=wp.vec3, device=device),
         indices=wp.array(indices.astype(np.int32).flatten(), dtype=wp.int32, device=device),
+        support_winding_number=support_winding_number,
     )

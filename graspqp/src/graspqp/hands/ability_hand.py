@@ -1,3 +1,17 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+
+"""PSYONIC Ability Hand model.
+
+Builds a :class:`graspqp.core.HandModel` for the 6-DoF PSYONIC Ability Hand. The
+four fingers (index, middle, ring, little) are each mechanically coupled: the distal
+joint (``*_q2``) follows the proximal joint (``*_q1``) through a fixed transmission
+ratio, so only the proximal joint is actuated. The thumb has two independent joints
+(``thumb_q1``, ``thumb_q2``). The coupling is expressed here in
+:func:`get_all_joint_angles` and threaded into the model via custom forward-kinematics
+and Jacobian callbacks.
+"""
+
 import json
 import os
 
@@ -5,8 +19,24 @@ import torch
 
 from graspqp.core import HandModel
 
-
+# Transmission ratio coupling each finger's distal joint (`*_q2`) to its
+# proximal joint (`*_q1`): q2 = mult * q1 + offset.
 def get_all_joint_angles(joint_angles: torch.Tensor):
+    """Expand the 6 actuated DoF to the 10 physical joint angles of the Ability Hand.
+
+    The four fingers are underactuated: each distal joint follows its proximal joint
+    through the fixed transmission ``q2 = mult * q1 + offset``. The thumb's two joints
+    are passed through unchanged.
+
+    Args:
+        joint_angles: Actuated joint angles, shape ``(..., 6)`` in radians, ordered
+            ``[index_q1, middle_q1, ring_q1, little_q1, thumb_q1, thumb_q2]``.
+
+    Returns:
+        torch.Tensor: Full physical joint angles, shape ``(..., 10)`` in radians,
+        ordered ``[index_q1, index_q2, middle_q1, middle_q2, ring_q1, ring_q2,
+        little_q1, little_q2, thumb_q1, thumb_q2]``.
+    """
     mult, offset = 1.05851325, 0.0
     joint_angles = torch.stack(
         [
@@ -27,10 +57,34 @@ def get_all_joint_angles(joint_angles: torch.Tensor):
 
 
 def calculate_joints(joint_angles: torch.Tensor, hand_model):
+    """Forward kinematics from the 6 actuated DoF, accounting for finger coupling.
+
+    Args:
+        joint_angles: Actuated joint angles, shape ``(..., 6)`` in radians.
+        hand_model: The :class:`~graspqp.core.HandModel` providing the kinematic chain.
+
+    Returns:
+        Link poses produced by ``hand_model.chain.forward_kinematics`` for the full
+        set of physical joints.
+    """
     return hand_model.chain.forward_kinematics(get_all_joint_angles(joint_angles))
 
 
 def calculate_jacobian(joint_angles: torch.Tensor, hand_model):
+    """Jacobian w.r.t. the 6 actuated DoF, folding in the finger coupling.
+
+    The chain Jacobian is computed for all 10 physical joints and then reduced to the
+    6 actuated columns: each finger's coupled distal-joint column is added (scaled by
+    the transmission ratio) into its proximal-joint column, and the two thumb columns
+    are kept independent.
+
+    Args:
+        joint_angles: Actuated joint angles, shape ``(..., 6)`` in radians.
+        hand_model: The :class:`~graspqp.core.HandModel` providing the kinematic chain.
+
+    Returns:
+        torch.Tensor: Jacobian reduced to the 6 actuated DoF.
+    """
     mult = 1.05851325
     jacobian = hand_model.chain.jacobian(get_all_joint_angles(joint_angles))
     # modify the jacobian to account for the fact that the thumb_q2 joint is not used
@@ -40,7 +94,34 @@ def calculate_jacobian(joint_angles: torch.Tensor, hand_model):
 
 
 def getHandModel(device: str, asset_dir: str, grasp_type: str = "all", **kwargs) -> HandModel:
+    """Build the PSYONIC Ability Hand model.
+
+    Loads the Ability Hand URDF, meshes and contact/penetration point definitions and
+    wires up the finger-coupling forward-kinematics and Jacobian callbacks. The hand is
+    controlled through 6 actuated DoF ``[index_q1, middle_q1, pinky_q1, ring_q1,
+    thumb_q1, thumb_q2]``.
+
+    Args:
+        device: Torch device for the model tensors (e.g. ``"cuda"``).
+        asset_dir: Root assets directory; hand files are read from
+            ``{asset_dir}/ability_hand``.
+        grasp_type: Selects which subset of contact links is active. ``"all"`` (or
+            ``"default"``) uses every link; any other value is looked up in
+            ``eigengrasps.json`` to restrict the active contact links to a named
+            grasp/eigengrasp preset.
+        **kwargs: Additional :class:`~graspqp.core.HandModel` arguments that override
+            the defaults set here.
+
+    Returns:
+        HandModel: The configured Ability Hand model.
+
+    Raises:
+        ValueError: If ``grasp_type`` is not ``"all"`` and either ``eigengrasps.json``
+            is missing or does not contain the requested grasp type.
+    """
     contact_links = None
+    if grasp_type == "default":
+        grasp_type = "all"
 
     if grasp_type is not None and grasp_type != "all":
         eigengrasp_file = f"{asset_dir}/ability_hand/eigengrasps.json"

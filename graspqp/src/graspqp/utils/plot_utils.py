@@ -1,7 +1,28 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+
+"""Visualization helpers for grasps (Open3D and Plotly).
+
+Convenience functions to inspect a hand/object configuration: an interactive Open3D
+viewer for the initialized grasps and a Plotly figure that overlays the object mesh,
+the hand mesh and the contact points/normals.
+"""
+
 import plotly.graph_objs as go
 
 
 def show_initialization(object_model, hand_model, batch_size, n_objects):
+    """Open an interactive Open3D viewer showing the initialized hand-object grasps.
+
+    For each object, draws the object mesh together with each of the ``batch_size``
+    hand meshes grasping it.
+
+    Args:
+        object_model: Object model exposing ``get_open3d_data(idx)``.
+        hand_model: Hand model exposing ``get_open3d_data(idx)``.
+        batch_size: Number of grasp samples (hand poses) per object.
+        n_objects: Number of distinct objects in the batch.
+    """
     # create open3d viewer
     import open3d as o3d
     from open3d.visualization.rendering import MaterialRecord
@@ -46,6 +67,21 @@ def show_initialization(object_model, hand_model, batch_size, n_objects):
 
 
 def get_plotly_fig(object_model, hand_model, env_idx):
+    """Build a Plotly 3D figure of a single grasp with its contacts.
+
+    Overlays the object mesh, the hand mesh, the hand's contact candidate points, and
+    the resolved contact points on the object surface with their outward normals
+    (drawn as short line segments).
+
+    Args:
+        object_model: Object model exposing ``get_plotly_data`` and ``cal_distance``.
+        hand_model: Hand model exposing ``get_plotly_data``, ``get_contact_points``,
+            ``get_contact_candidates`` and ``contact_normals``.
+        env_idx: Index of the environment / grasp sample to visualize.
+
+    Returns:
+        plotly.graph_objs.Figure: The assembled 3D scene.
+    """
     object_plotly = object_model.get_plotly_data(env_idx, opacity=1.0, simplify=False)
     hand_plotly = hand_model.get_plotly_data(
         env_idx, opacity=0.9, with_contact_points=True, with_surface_points=False, with_penetration_points=False, simplify=True

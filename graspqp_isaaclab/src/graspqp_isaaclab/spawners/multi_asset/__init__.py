@@ -1,3 +1,5 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+#
 # Copyright (c) 2022-2025, The Isaac Lab Project Developers.
 # All rights reserved.
 #

@@ -1,6 +1,9 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+
 import json
 
-data = json.load(open("/home/zrene/git/DexGraspNet/graspqp/assets/ability_hand/penetration_points.json"))
+data = json.load(open("/path/to/graspqp/assets/ability_hand/penetration_points.json"))
 link_mapping = {
     # "index_link_1": "index_link_1/contact",
     # "index_link_2": "index_link_2/contact",

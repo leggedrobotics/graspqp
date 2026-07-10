@@ -1,4 +1,26 @@
-"""
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+#
+# Portions derived from DexGraspNet (https://github.com/PKU-EPIC/DexGraspNet),
+# MIT License, Copyright (c) 2023 Jialiang Zhang, Ruicheng Wang.
+
+"""Differentiable articulated hand model for grasp optimization.
+
+Defines :class:`HandModel`, which loads a robot hand from a URDF/MJCF, builds
+per-link collision meshes and a selectable-backend signed distance field, and
+exposes the differentiable quantities the grasp energies need:
+
+* forward kinematics of a batched hand pose (translation + 6D rotation + joint
+  angles),
+* sampled surface points, hand-selected contact candidates and penetration
+  keypoints transformed into the world frame,
+* SDF penetration queries (object points vs. hand, :meth:`HandModel.cal_distance`)
+  and a self-penetration energy,
+* contact Jacobians / manipulability for force-based objectives.
+
+The whole model is differentiable w.r.t. the hand pose so gradient-based
+samplers (see :mod:`graspqp.core.optimizer`) can optimize grasps end to end.
+
 Based on Dexgraspnet: https://pku-epic.github.io/DexGraspNet/
 """
 
@@ -6,23 +28,24 @@ import contextlib
 import json
 import os
 
+import yaml
 import numpy as np
 import torch
+from torch import nn
 
-from graspqp.utils.transforms import \
-    robust_compute_rotation_matrix_from_ortho6d
+from graspqp.utils.transforms import robust_compute_rotation_matrix_from_ortho6d
 
 with contextlib.suppress(ImportError):
     import plotly.graph_objects as go
 
 import contextlib
 
-import pytorch3d.ops
-import pytorch3d.structures
 import pytorch_kinematics as pk
+
+from .pytorch3d_compat import Meshes, sample_farthest_points, sample_points_from_meshes
 import trimesh as tm
 
-SDF_BACKEND = os.environ.get("SDF_BACKEND", "TORCHSDF").upper()
+SDF_BACKEND = os.environ.get("SDF_BACKEND", "WARP").upper()
 
 if SDF_BACKEND == "WARP":
     import warp as wp
@@ -39,8 +62,82 @@ with contextlib.suppress(ImportError):
     import open3d as o3d
 
 import roma
-from pytorch_kinematics.transforms.rotation_conversions import \
-    matrix_to_quaternion
+from pytorch_kinematics.transforms.rotation_conversions import matrix_to_quaternion
+
+
+def _fps_sampling(points: torch.Tensor, K: int) -> torch.Tensor:
+    """
+    Farthest Point Sampling (FPS) to subsample K points from input points.
+
+    Args:
+        points: Input points tensor of shape (N, 3) or (B, N, 3)
+        K: Number of points to sample
+
+    Returns:
+        Sampled points of shape (K, 3) or (B, K, 3)
+    """
+    # Try using pytorch3d if available
+    try:
+        from pytorch3d.ops.sample_farthest_points import sample_farthest_points
+
+        # Handle both batched and unbatched inputs
+        if points.ndim == 2:
+            points_batched = points.unsqueeze(0)
+            sampled, _ = sample_farthest_points(points_batched, K=K)
+            return sampled.squeeze(0)
+        else:
+            sampled, _ = sample_farthest_points(points, K=K)
+            return sampled
+
+    except ImportError:
+        # Native PyTorch implementation
+        if points.ndim == 2:
+            # Unbatched case: (N, 3) -> (K, 3)
+            N = points.shape[0]
+            device = points.device
+
+            # Initialize with random first point
+            sampled_indices = torch.zeros(K, dtype=torch.long, device=device)
+            sampled_indices[0] = torch.randint(0, N, (1,), device=device)
+
+            # Track minimum distances from sampled points
+            distances = torch.full((N,), float("inf"), device=device)
+
+            for i in range(1, K):
+                # Update distances based on last sampled point
+                last_point = points[sampled_indices[i - 1]]
+                dists_to_last = torch.sum((points - last_point) ** 2, dim=1)
+                distances = torch.minimum(distances, dists_to_last)
+
+                # Select farthest point
+                sampled_indices[i] = torch.argmax(distances)
+
+            return points[sampled_indices]
+        else:
+            # Batched case: (B, N, 3) -> (B, K, 3)
+            B, N, _ = points.shape
+            device = points.device
+
+            sampled_indices = torch.zeros(B, K, dtype=torch.long, device=device)
+            sampled_indices[:, 0] = torch.randint(0, N, (B,), device=device)
+
+            distances = torch.full((B, N), float("inf"), device=device)
+
+            for i in range(1, K):
+                # Get last sampled points for all batches
+                last_points = torch.gather(
+                    points, 1, sampled_indices[:, i - 1 : i].unsqueeze(-1).expand(-1, -1, 3)
+                ).squeeze(1)
+
+                # Compute distances to last sampled point
+                dists_to_last = torch.sum((points - last_points.unsqueeze(1)) ** 2, dim=2)
+                distances = torch.minimum(distances, dists_to_last)
+
+                # Select farthest points
+                sampled_indices[:, i] = torch.argmax(distances, dim=1)
+
+            # Gather sampled points
+            return torch.gather(points, 1, sampled_indices.unsqueeze(-1).expand(-1, -1, 3))
 
 
 @torch.jit.script
@@ -54,15 +151,53 @@ def pinv(A: torch.Tensor, l: float = 1e-3):
         return torch.linalg.inv(A.mT @ A + l * torch.eye(n, device=A.device)) @ A.mT
 
 
-class HandModel:
+class HandModel(nn.Module):
+    """Differentiable articulated hand loaded from a URDF/MJCF description.
+
+    On construction the kinematic chain is parsed, per-link collision meshes are
+    built, surface points / contact candidates / penetration keypoints are
+    sampled (and cached to disk), and a signed distance field is created with the
+    backend selected by the ``SDF_BACKEND`` environment variable.
+
+    A batch of grasps is driven through :meth:`set_parameters`, which stores the
+    hand pose as ``hand_pose`` -- a ``(B, 9 + n_dofs)`` tensor of
+    ``[translation(3), rotation6d(6), joint_angles(n_dofs)]`` -- runs forward
+    kinematics and updates the derived contact points/normals. The remaining
+    public methods (``cal_distance``, ``get_surface_points``,
+    ``get_contact_points``, ``self_penetration``, ``get_manipulability`` ...) read
+    from that state and stay differentiable w.r.t. ``hand_pose``.
+
+    Attributes:
+        device: Torch device holding the model tensors.
+        n_dofs (int): Number of actuated joints.
+        hand_pose (torch.Tensor): ``(B, 9 + n_dofs)`` current batched pose (leaf
+            requiring grad after :meth:`set_parameters`).
+        contact_points (torch.Tensor): ``(B, n_contact, 3)`` selected contact
+            points in world frame.
+        contact_normals (torch.Tensor): ``(B, n_contact, 3)`` outward contact
+            normals in world frame.
+        joints_lower (torch.Tensor): ``(n_dofs,)`` lower joint limits (radians).
+        joints_upper (torch.Tensor): ``(n_dofs,)`` upper joint limits (radians).
+        n_contact_candidates (int): Total number of hand contact candidates.
+    """
+
     @staticmethod
     def estimate_static_frame_from_hand_points(
         keypoint_3d_array: np.ndarray,
     ) -> np.ndarray:
-        """
-        Compute the 3D coordinate frame (orientation only) from detected 3d key points
-        :param points: keypoint3 detected from MediaPipe detector. Order: [wrist, index, middle, pinky]
-        :return: the coordinate frame of wrist in MANO convention
+        """Estimate the wrist coordinate frame (orientation only) from hand keypoints.
+
+        Fits a palm plane to the wrist/index/middle keypoints with SVD and
+        Gram-Schmidt-orthonormalizes an x-vector against the plane normal to
+        build a right-handed frame in the MANO convention.
+
+        Args:
+            keypoint_3d_array (np.ndarray): ``(21, 3)`` 3D hand keypoints (e.g.
+                from a MediaPipe detector).
+
+        Returns:
+            np.ndarray: ``(3, 3)`` rotation matrix whose columns are the wrist
+            frame axes in the MANO convention.
         """
         assert keypoint_3d_array.shape == (21, 3)
         points = keypoint_3d_array[[0, 5, 9], :]
@@ -88,59 +223,6 @@ class HandModel:
         frame = np.stack([x, normal, z], axis=1)
         return frame
 
-    def retarget(self, mano_keypoints):
-        from dex_retargeting.misc.constants import (OPERATOR2MANO_RIGHT,
-                                                    ManoModel)
-
-        if not hasattr(self, "_retargeter") or self._retargeter is None:
-            raise ValueError("Retargeter not loaded. Please load retargeter first.")
-
-        if isinstance(mano_keypoints, torch.Tensor):
-            mano_keypoints = mano_keypoints.cpu().numpy()
-
-        static_orientation = self.estimate_static_frame_from_hand_points(mano_keypoints)
-        self._static_orientation = np.eye(3, 3)  # static_orientation @ OPERATOR2MANO_RIGHT
-        joint_pos_static = mano_keypoints  # @ static_orientation @ OPERATOR2MANO_RIGHT
-
-        anchors = mano_keypoints  # (21, 3) joints
-        wrist_pos = anchors[0]  # (3,) wrist position
-
-        # zero center$
-        mano_keypoints = anchors.copy()  # - wrist_pos  # (20, 3) finger joints relative to wrist
-        joint_pos_static = mano_keypoints
-
-        # Unique retargeting indices
-        indices = self._retargeter.optimizer.target_link_human_indices
-        origin_indices = indices[0, :]
-        task_indices = indices[1, :]
-        ref_value = joint_pos_static[task_indices, :] - joint_pos_static[origin_indices, :]
-        self._retargeter.optimizer._start_kp = joint_pos_static[origin_indices, :]
-        self._retargeter.optimizer._end_kp = joint_pos_static[task_indices, :]
-
-        qpos, root_pose = self._retargeter.retarget(ref_value, keypoints=joint_pos_static)
-        optimizer_link_order = self._retargeter.optimizer.all_joint_names
-        for name in self._actuated_joints_names:
-            if name not in optimizer_link_order:
-                print(f"Warning: {name} not in optimizer link order. Skipping.")
-                print(f"Available joints: {optimizer_link_order}")
-                print("All joints: ", self._actuated_joints_names)
-        target_idxs = [optimizer_link_order.index(name) for name in self._actuated_joints_names]
-        position = qpos[target_idxs]
-        target_joint_pos = torch.from_numpy(position).to(self.device).float()
-        # figure out global alignment
-
-        return target_joint_pos, torch.from_numpy(root_pose).to(self.device).float()
-
-    def load_retargeter(self, retargeter_path, urdf_root_dir=None):
-        import yaml
-        from dex_retargeting.retarget.retargeting_config import \
-            RetargetingConfig
-
-        RetargetingConfig.set_default_urdf_dir(urdf_root_dir)
-        cfg = RetargetingConfig.load_from_dict(yaml.safe_load(open(retargeter_path, "r"))["retargeting"])
-        self._retargeter = cfg.build()
-        self._cfg = cfg
-
     def _parse_mjcf(
         self,
         mjcf_path,
@@ -160,17 +242,20 @@ class HandModel:
         def _get_mesh_for_visual(visual, simplify_mesh):
             scale = torch.tensor([1, 1, 1], dtype=torch.float, device=device)
             if visual.geom_type == "box":
-                return tm.primitives.Box(extents=2 * np.array(visual.geom_param)), torch.tensor(
-                    [1, 1, 1], dtype=torch.float, device=device
-                )
+                # trimesh Box expects full side lengths. URDF <box size="x y z"> already
+                # gives full side lengths, whereas MuJoCo/MJCF gives half-extents.
+                box_extents = np.array(visual.geom_param)
+                if not mjcf_path.endswith(".urdf"):
+                    box_extents = 2 * box_extents
+                return tm.primitives.Box(extents=box_extents), torch.tensor([1, 1, 1], dtype=torch.float, device=device)
             elif visual.geom_type == "capsule":
-                return tm.primitives.Capsule(radius=visual.geom_param[0], height=visual.geom_param[1] * 2).apply_translation(
-                    (0, 0, -visual.geom_param[1])
-                )
+                return tm.primitives.Capsule(
+                    radius=visual.geom_param[0], height=visual.geom_param[1] * 2
+                ).apply_translation((0, 0, -visual.geom_param[1]))
             elif visual.geom_type == "cylinder":
-                return tm.primitives.Cylinder(radius=visual.geom_param[0], height=visual.geom_param[1]).apply_translation(
-                    (0, 0, -visual.geom_param[1] / 2)
-                )
+                return tm.primitives.Cylinder(
+                    radius=visual.geom_param[0], height=visual.geom_param[1]
+                ).apply_translation((0, 0, -visual.geom_param[1] / 2))
             elif visual.geom_type == "sphere":
                 return tm.primitives.Sphere(radius=visual.geom_param)
             elif visual.geom_type == "mesh":
@@ -282,11 +367,8 @@ class HandModel:
                             # sample surface points
                             points = tm.sample.sample_surface_even(mesh, 1000)[0]
                             # subsample with fps sampling
-                            from pytorch3d.ops.sample_farthest_points import \
-                                sample_farthest_points
-
                             points = torch.tensor(points, dtype=torch.float, device=device)
-                            points = sample_farthest_points(points.unsqueeze(0), K=num_points)[0].squeeze(0)
+                            points = _fps_sampling(points, K=num_points)
 
                             # seed everything
                             torch.manual_seed(new_seed)
@@ -312,7 +394,9 @@ class HandModel:
                 if penetration_points is None or not (link_name in penetration_points):
                     penetration_keypoints = torch.tensor([], dtype=torch.float, device=device).reshape(0, 3)
                 else:
-                    penetration_keypoints = torch.tensor(penetration_points[link_name], dtype=torch.float, device=device)
+                    penetration_keypoints = torch.tensor(
+                        penetration_points[link_name], dtype=torch.float, device=device
+                    )
                 scales = torch.ones(len(penetration_keypoints), device=device) * 0.01
 
                 if len(penetration_keypoints) != 0:
@@ -363,7 +447,7 @@ class HandModel:
                         device=str(device),
                         dtype=wp.int32,
                     )
-                    wp_mesh = wp.Mesh(points=verts_wp, indices=faces_wp)
+                    wp_mesh = wp.Mesh(points=verts_wp, indices=faces_wp, support_winding_number=True)
                     link_face_verts = wp_mesh
                 elif SDF_BACKEND == "KAOLIN":
                     link_face_verts = kaolin.ops.mesh.index_vertices_by_faces(link_vertices.unsqueeze(0), link_faces)
@@ -411,29 +495,71 @@ class HandModel:
         contact_links=None,
         grasp_type=None,
         grasp_axis=None,
+        regenerate=False,
+        root_frame=None,
     ):
-        """
-        Create a Hand Model for a MJCF robot
+        """Create a hand model from a URDF or MJCF robot description.
 
-        Parameters
-        ----------
-        mjcf_path: str
-            path to mjcf file
-        mesh_path: str
-            path to mesh directory
-        contact_points_path: str
-            path to hand-selected contact candidates
-        penetration_points_path: str
-            path to hand-selected penetration keypoints
-        n_surface_points: int
-            number of points to sample from surface of hand, use fps
-        device: str | torch.Device
-            device for torch tensors
-        """
+        Parses the kinematic chain, builds per-link meshes and the SDF, samples
+        (and disk-caches) surface points / contact candidates / penetration
+        keypoints, and reads the joint limits.
 
+        Args:
+            mjcf_path (str): Path to the ``.urdf`` or ``.xml`` (MJCF) file.
+            mesh_path (str): Directory containing the link meshes.
+            contact_points_path (str | dict | None): Path to (or dict of)
+                hand-selected contact candidates per link.
+            penetration_points_path (str | None): Path to hand-selected
+                penetration keypoints (spheres) used for the self-penetration
+                energy.
+            n_surface_points (int): Number of hand surface points to sample with
+                farthest-point sampling (distributed across links by area).
+            device (str | torch.device): Device for the torch tensors.
+            joint_calc_fnc (callable | None): Optional override for forward
+                kinematics, called as ``joint_calc_fnc(joint_angles, self)``.
+            jacobian_fnc (callable | None): Optional override for the Jacobian,
+                called as ``jacobian_fnc(joint_angles, self)``.
+            joint_filter (list[str] | None): If given, only these joints are
+                treated as actuated DOFs.
+            default_state (torch.Tensor | None): ``(n_dofs,)`` default joint
+                angles (radians); zeros if omitted.
+            forward_axis (str): Hand approach axis, one of ``x``, ``y``, ``z``
+                and their negatives.
+            up_axis (str): Hand up axis (same encoding as ``forward_axis``).
+            only_use_collision (bool): Use only collision geometry, ignoring
+                visual meshes.
+            use_collision_if_possible (bool): Prefer collision meshes when a link
+                provides them.
+            contact_links (dict | None): Restrict contact candidates to these
+                links (e.g. an eigengrasp selection).
+            grasp_type (str | None): Named grasp type; when set (and not
+                ``"all"``/``"default"``) loads the matching link selection from
+                the hand's ``eigengrasps.json`` and may preset non-participating
+                fingers to their joint limits.
+            grasp_axis (str | None): Axis used by the grasp prior; defaults to
+                ``forward_axis``.
+            regenerate (bool): Force re-sampling of surface/contact points even
+                if a cache exists.
+            root_frame (str | None): Name of a frame in the kinematic chain to
+                use as the new root. When set, the static (zero-angle) transform
+                from the URDF root to this frame is computed at init time,
+                inverted, and pre-multiplied into every FK result so all outputs
+                are expressed relative to this frame. When None the URDF root is
+                used (default behavior).
+
+        Raises:
+            ValueError: If ``grasp_type`` is requested but ``eigengrasps.json``
+                or the type is missing, or if an unsupported argument type is
+                passed.
+        """
+        super(HandModel, self).__init__()
         self.device = device
         self.joint_calc_fnc = joint_calc_fnc
         self.jacobian_fnc = jacobian_fnc
+        self._file_path = mjcf_path
+        self._root_frame_name = root_frame
+        if root_frame is not None:
+            print("Using root frame transform for forward kinematics")
 
         if grasp_type != None and grasp_type != "all" and contact_links is None and grasp_type != "default":
             eigengrasp_file = os.path.join(os.path.dirname(mesh_path), "eigengrasps.json")
@@ -472,7 +598,9 @@ class HandModel:
         self._joint_mask = None  # [0,2,4,6,8, 9]
         self._joint_filter = joint_filter
         self._actuated_joints_names = [
-            name for name in self.chain.get_joint_parameter_names() if self._joint_filter is None or name in self._joint_filter
+            name
+            for name in self.chain.get_joint_parameter_names()
+            if self._joint_filter is None or name in self._joint_filter
         ]
         self.n_dofs = len(self._actuated_joints_names)
         # self.n_dofs = len(self.chain.get_joint_parameter_names()) if self._joint_mask is None else len(self._joint_mask)
@@ -498,7 +626,9 @@ class HandModel:
         #     if contact_points_path is not None
         #     else None
         # )
-        penetration_points = json.load(open(penetration_points_path, "r")) if penetration_points_path is not None else None
+        penetration_points = (
+            json.load(open(penetration_points_path, "r")) if penetration_points_path is not None else None
+        )
 
         # build mesh
         if mjcf_path.endswith(".urdf"):
@@ -602,31 +732,85 @@ class HandModel:
         # sample surface points
 
         total_area = sum(areas.values())
-        num_samples = dict([(link_name, int(areas[link_name] / total_area * n_surface_points)) for link_name in self.mesh])
+        num_samples = dict(
+            [(link_name, int(areas[link_name] / total_area * n_surface_points)) for link_name in self.mesh]
+        )
         num_samples[list(num_samples.keys())[0]] += n_surface_points - sum(num_samples.values())
 
-        for link_name in self.mesh:
-            if num_samples[link_name] == 0:
-                self.mesh[link_name]["surface_points"] = torch.tensor([], dtype=torch.float, device=device).reshape(0, 3)
-                continue
-            mesh = pytorch3d.structures.Meshes(
-                self.mesh[link_name]["vertices"].unsqueeze(0),
-                self.mesh[link_name]["faces"].unsqueeze(0),
-            )
-            old_seed = torch.randint(0, 100, (1,))
-            new_seed = 42
-            # seed everything
-            torch.manual_seed(new_seed)
-            np.random.seed(new_seed)
+        cached_points_path = contact_points_path.replace(".json", f"_cached_state_{grasp_type}.json")
+        if not os.path.exists(cached_points_path) or regenerate:
+            for link_name in self.mesh:
+                if num_samples[link_name] == 0:
+                    self.mesh[link_name]["surface_points"] = torch.tensor([], dtype=torch.float, device=device).reshape(
+                        0, 3
+                    )
+                    continue
+                mesh = Meshes(
+                    self.mesh[link_name]["vertices"].unsqueeze(0),
+                    self.mesh[link_name]["faces"].unsqueeze(0),
+                )
+                old_seed = torch.randint(0, 100, (1,))
+                new_seed = 42
+                # seed everything
+                torch.manual_seed(new_seed)
+                np.random.seed(new_seed)
 
-            dense_point_cloud = pytorch3d.ops.sample_points_from_meshes(mesh, num_samples=100 * num_samples[link_name])
-            surface_points = pytorch3d.ops.sample_farthest_points(dense_point_cloud, K=num_samples[link_name])[0][0]
-            surface_points.to(dtype=float, device=device)
-            # seed everything
-            torch.manual_seed(old_seed)
-            np.random.seed(old_seed)
+                dense_point_cloud = sample_points_from_meshes(mesh, num_samples=100 * num_samples[link_name])
+                surface_points = sample_farthest_points(dense_point_cloud, K=num_samples[link_name])[0][0]
+                surface_points.to(dtype=float, device=device)
+                # seed everything
+                torch.manual_seed(old_seed)
+                np.random.seed(old_seed)
 
-            self.mesh[link_name]["surface_points"] = surface_points
+                self.mesh[link_name]["surface_points"] = surface_points
+
+            surface_points_data = {
+                link_name: self.mesh[link_name]["surface_points"].cpu().numpy().tolist() for link_name in self.mesh
+            }
+            # do save current state
+            points = {
+                link_name: self.mesh[link_name]["contact_candidates"].cpu().numpy().tolist() for link_name in self.mesh
+            }
+            normals = {
+                link_name: self.mesh[link_name]["normal_candidates"].cpu().numpy().tolist() for link_name in self.mesh
+            }
+            # dump as json
+            with open(cached_points_path, "w") as f:
+                json.dump({"points": points, "normals": normals, "surface_points": surface_points_data}, f)
+            print(f"Contact state saved to {cached_points_path}")
+        else:
+            print(f"Loading cached contact state from {cached_points_path}")
+            json_data = json.load(open(cached_points_path, "r"))
+            surface_points_data = json_data.get("surface_points", {})
+
+            for link_name in self.mesh:
+                # surface points
+                if link_name in surface_points_data:
+                    self.mesh[link_name]["surface_points"] = torch.tensor(
+                        surface_points_data[link_name], dtype=torch.float, device=device
+                    )
+                else:
+                    self.mesh[link_name]["surface_points"] = torch.tensor([], dtype=torch.float, device=device).reshape(
+                        0, 3
+                    )
+                # contact points
+                if link_name in json_data.get("points", {}):
+                    self.mesh[link_name]["contact_candidates"] = torch.tensor(
+                        json_data["points"][link_name], dtype=torch.float, device=device
+                    )
+                else:
+                    self.mesh[link_name]["contact_candidates"] = torch.tensor(
+                        [], dtype=torch.float, device=device
+                    ).reshape(0, 3)
+                # normal points
+                if link_name in json_data.get("normals", {}):
+                    self.mesh[link_name]["normal_candidates"] = torch.tensor(
+                        json_data["normals"][link_name], dtype=torch.float, device=device
+                    )
+                else:
+                    self.mesh[link_name]["normal_candidates"] = torch.tensor(
+                        [], dtype=torch.float, device=device
+                    ).reshape(0, 3)
 
         # indexing
 
@@ -639,11 +823,10 @@ class HandModel:
             [[i] * len(contact_candidates) for i, contact_candidates in enumerate(self.contact_candidates)],
             [],
         )
+
         self.contact_candidates = torch.cat(self.contact_candidates, dim=0)
         self.r_contact_body_frames = self.contact_candidates.clone()
-
         self.contact_normals_candidates = torch.cat(self.contact_normals_candidates, dim=0)
-
         self.global_index_to_link_index = torch.tensor(self.global_index_to_link_index, dtype=torch.long, device=device)
         self.n_contact_candidates = self.contact_candidates.shape[0]
 
@@ -694,6 +877,131 @@ class HandModel:
         ]
         self.joints_lower = torch.stack(self.joints_lower).float().to(device)
         self.joints_upper = torch.stack(self.joints_upper).float().to(device)
+
+        # Compute the static (zero-angle) offset for the optional root frame
+        # re-rooting: all FK results will be expressed relative to root_frame
+        self._root_frame_inv = None
+        if self._root_frame_name is not None:
+            n_chain_dofs = len(self.chain.get_joint_parameter_names())
+            zero_angles = torch.zeros(1, n_chain_dofs, dtype=torch.float, device=device)
+            static_fk = self.chain.forward_kinematics(zero_angles)
+            if self._root_frame_name not in static_fk:
+                raise ValueError(
+                    f"root_frame '{self._root_frame_name}' not found in chain. "
+                    f"Available frames: {list(static_fk.keys())}"
+                )
+            self._root_frame_inv = static_fk[self._root_frame_name].inverse()
+
+    def to(self, device):
+        """
+        Move the HandModel and all its components to the specified device.
+
+        Parameters
+        ----------
+        device : str or torch.device
+            Target device (e.g., 'cuda', 'cpu', 'cuda:0')
+
+        Returns
+        -------
+        HandModel
+            Returns self for method chaining
+        """
+
+        if self.device == device:
+            return self
+        # Update device attribute
+        self.device = device
+
+        # Move kinematic chain
+        if hasattr(self, "chain") and self.chain is not None:
+            self.chain = self.chain.to(device=device)
+
+        # Move axis tensors
+        if hasattr(self, "forward_axis") and self.forward_axis is not None:
+            self.forward_axis = self.forward_axis.to(device)
+        if hasattr(self, "up_axis") and self.up_axis is not None:
+            self.up_axis = self.up_axis.to(device)
+        if hasattr(self, "grasp_axis") and self.grasp_axis is not None:
+            self.grasp_axis = self.grasp_axis.to(device)
+
+        # Move default state
+        if hasattr(self, "default_state") and self.default_state is not None:
+            self.default_state = self.default_state.to(device)
+
+        # Move joint limits
+        if hasattr(self, "joints_lower") and self.joints_lower is not None:
+            self.joints_lower = self.joints_lower.to(device)
+        if hasattr(self, "joints_upper") and self.joints_upper is not None:
+            self.joints_upper = self.joints_upper.to(device)
+
+        # Move mesh data
+        if hasattr(self, "mesh") and self.mesh is not None:
+            for link_name in self.mesh:
+                mesh_data = self.mesh[link_name]
+                if "vertices" in mesh_data and mesh_data["vertices"] is not None:
+                    mesh_data["vertices"] = mesh_data["vertices"].to(device)
+                if "faces" in mesh_data and mesh_data["faces"] is not None:
+                    mesh_data["faces"] = mesh_data["faces"].to(device)
+                if "face_verts" in mesh_data and mesh_data["face_verts"] is not None:
+                    mesh_data["face_verts"] = mesh_data["face_verts"].to(device)
+                if "contact_candidates" in mesh_data and mesh_data["contact_candidates"] is not None:
+                    mesh_data["contact_candidates"] = mesh_data["contact_candidates"].to(device)
+                if "normal_candidates" in mesh_data and mesh_data["normal_candidates"] is not None:
+                    mesh_data["normal_candidates"] = mesh_data["normal_candidates"].to(device)
+                if "penetration_keypoints" in mesh_data and mesh_data["penetration_keypoints"] is not None:
+                    mesh_data["penetration_keypoints"] = mesh_data["penetration_keypoints"].to(device)
+                if "surface_points" in mesh_data and mesh_data["surface_points"] is not None:
+                    mesh_data["surface_points"] = mesh_data["surface_points"].to(device)
+                if "scales" in mesh_data and mesh_data["scales"] is not None:
+                    mesh_data["scales"] = mesh_data["scales"].to(device)
+
+        # Move contact and penetration point data
+        if hasattr(self, "contact_candidates") and self.contact_candidates is not None:
+            self.contact_candidates = self.contact_candidates.to(device)
+        if hasattr(self, "r_contact_body_frames") and self.r_contact_body_frames is not None:
+            self.r_contact_body_frames = self.r_contact_body_frames.to(device)
+        if hasattr(self, "contact_normals_candidates") and self.contact_normals_candidates is not None:
+            self.contact_normals_candidates = self.contact_normals_candidates.to(device)
+        if hasattr(self, "penetration_keypoints") and self.penetration_keypoints is not None:
+            self.penetration_keypoints = self.penetration_keypoints.to(device)
+        if hasattr(self, "penetration_keypoints_expanded") and self.penetration_keypoints_expanded is not None:
+            self.penetration_keypoints_expanded = self.penetration_keypoints_expanded.to(device)
+        if hasattr(self, "sphere_scales") and self.sphere_scales is not None:
+            self.sphere_scales = self.sphere_scales.to(device)
+
+        # Move indexing tensors
+        if hasattr(self, "global_index_to_link_index") and self.global_index_to_link_index is not None:
+            self.global_index_to_link_index = self.global_index_to_link_index.to(device)
+        if (
+            hasattr(self, "global_index_to_link_index_penetration")
+            and self.global_index_to_link_index_penetration is not None
+        ):
+            self.global_index_to_link_index_penetration = self.global_index_to_link_index_penetration.to(device)
+        if (
+            hasattr(self, "global_index_to_link_index_penetration_epanded")
+            and self.global_index_to_link_index_penetration_epanded is not None
+        ):
+            self.global_index_to_link_index_penetration_epanded = (
+                self.global_index_to_link_index_penetration_epanded.to(device)
+            )
+
+        # Move dynamic state tensors (if they exist)
+        if hasattr(self, "hand_pose") and self.hand_pose is not None:
+            self.hand_pose = self.hand_pose.to(device)
+        if hasattr(self, "contact_point_indices") and self.contact_point_indices is not None:
+            self.contact_point_indices = self.contact_point_indices.to(device)
+        if hasattr(self, "global_translation") and self.global_translation is not None:
+            self.global_translation = self.global_translation.to(device)
+        if hasattr(self, "global_rotation") and self.global_rotation is not None:
+            self.global_rotation = self.global_rotation.to(device)
+        if hasattr(self, "contact_points") and self.contact_points is not None:
+            self.contact_points = self.contact_points.to(device)
+        if hasattr(self, "contact_normals") and self.contact_normals is not None:
+            self.contact_normals = self.contact_normals.to(device)
+        if hasattr(self, "rand_contact_candidates") and self.rand_contact_candidates is not None:
+            self.rand_contact_candidates = self.rand_contact_candidates.to(device)
+
+        return self
 
     def joint_entropy(self):
         """
@@ -760,16 +1068,51 @@ class HandModel:
         return translation_entropy, rotation_entropy
 
     def fk(self, joint_angles):
-        if self.joint_calc_fnc is not None:
-            return self.joint_calc_fnc(joint_angles, self)
+        """Run forward kinematics for a batch of joint configurations.
 
-        return self.chain.forward_kinematics(joint_angles)
+        Uses ``joint_calc_fnc`` if one was supplied, otherwise the parsed
+        kinematic chain. When a ``root_frame`` was configured, every link
+        transform is re-expressed relative to that frame.
+
+        Args:
+            joint_angles (torch.Tensor): ``(B, n_dofs)`` joint angles (radians).
+
+        Returns:
+            dict: Mapping of link name to its batched transform (a
+            ``pytorch_kinematics`` transform whose matrix is ``(B, 4, 4)``,
+            link-local -> hand-root frame).
+        """
+        if self.joint_calc_fnc is not None:
+            result = self.joint_calc_fnc(joint_angles, self)
+        else:
+            result = self.chain.forward_kinematics(joint_angles)
+        if self._root_frame_inv is not None:
+            result = {k: self._root_frame_inv.compose(v) for k, v in result.items()}
+        return result
+
+    def normalize_angles(self, joint_angles):
+        # Normalization is currently disabled; joint angles are used as-is.
+        return joint_angles
+
+    def denormalize_angles(self, normalized_angles):
+        # Normalization is currently disabled; joint angles are used as-is.
+        return normalized_angles
 
     @property
     def actuated_joints_names(self):
+        """list[str]: Names of the actuated joints, in DOF order."""
         return self._actuated_joints_names
 
     def jacobian(self, joint_angles):
+        """Compute the per-link geometric Jacobian for a batch of joint angles.
+
+        Args:
+            joint_angles (torch.Tensor): ``(B, n_dofs)`` joint angles (radians).
+
+        Returns:
+            torch.Tensor: ``(B, n_links, 6, n_dofs)`` spatial Jacobians for the
+            links that carry geometry (linear rows first, angular rows last).
+        """
         if self.jacobian_fnc is not None:
             jacobian = self.jacobian_fnc(joint_angles, self)
         else:
@@ -778,11 +1121,31 @@ class HandModel:
 
     @property
     def n_actutated_joints(self):
+        """int: Number of actuated joints (alias of ``n_dofs``)."""
         return self.n_dofs
 
-    def get_contact_points(self):
+    @property
+    def link_names(self):
+        """Ordered link names, matching the index returned by ``cal_distance(..., return_link_index=True)``."""
+        return list(self.mesh.keys())
+
+    def get_contact_points(self, return_normals=False):
+        """Return the currently selected contact points (and optionally normals).
+
+        Reflects the contact indices set by the last :meth:`set_parameters` call.
+
+        Args:
+            return_normals (bool): If True, also return the outward contact
+                normals.
+
+        Returns:
+            torch.Tensor | tuple: ``contact_points`` of shape ``(B, n_contact,
+            3)``; when ``return_normals`` is True, a tuple ``(contact_points,
+            contact_normals)`` with matching shapes.
+        """
+        if return_normals:
+            return self.contact_points, self.contact_normals
         return self.contact_points
-        # return torch.cat([self.contact_points,  self.thumb_contacts], dim=1)
 
     def _set_contact_idxs(self, contact_point_indices, env_mask=None):
         if contact_point_indices is not None:
@@ -827,19 +1190,36 @@ class HandModel:
             # self.all_contact_points is shape (B, C, 3)
             # contact_point_indices is shape (B, n_contact)
 
-            self.contact_points = self.all_contact_points.gather(1, contact_point_indices.unsqueeze(-1).expand(-1, -1, 3))
-            self.contact_normals = self._all_contact_normals.gather(1, contact_point_indices.unsqueeze(-1).expand(-1, -1, 3))
+            self.contact_points = self.all_contact_points.gather(
+                1, contact_point_indices.unsqueeze(-1).expand(-1, -1, 3)
+            )
+            self.contact_normals = self._all_contact_normals.gather(
+                1, contact_point_indices.unsqueeze(-1).expand(-1, -1, 3)
+            )
 
     def set_parameters(self, hand_pose, contact_point_indices=None, env_mask=None):
-        """
-        Set translation, rotation, joint angles, and contact points of grasps
+        """Set the batched hand pose and (optionally) the contact selection.
 
-        Parameters
-        ----------
-        hand_pose: (B, 3+6+`n_dofs`) torch.FloatTensor
-            translation, rotation in rot6d, and joint angles
-        contact_point_indices: (B, `n_contact`) [Optional]torch.LongTensor
-            indices of contact candidates
+        Stores ``hand_pose`` as a fresh leaf tensor requiring grad (detached from
+        any previous optimization step's graph), decodes the 6D rotation into a
+        rotation matrix, runs forward kinematics, and refreshes the derived
+        contact points/normals and penetration keypoints.
+
+        Args:
+            hand_pose (torch.Tensor): ``(B, 3 + 6 + n_dofs)`` pose made of
+                translation (meters), rotation in 6D form, and joint angles
+                (radians).
+            contact_point_indices (torch.Tensor | str | None): ``(B, n_contact)``
+                indices into the contact candidates. Also accepts the strings
+                ``"all"`` (use every candidate) or ``"random_<k>"`` (a fixed
+                random subset of ``k`` candidates). If None, contacts are left
+                unchanged.
+            env_mask (torch.Tensor | None): Optional ``(B,)`` bool mask; only the
+                selected environments have their pose/contacts overwritten (the
+                rest keep their current values).
+
+        Raises:
+            ValueError: If ``hand_pose`` contains NaNs.
         """
 
         if env_mask is not None:
@@ -853,7 +1233,10 @@ class HandModel:
             # self.hand_pose._requires_grad = True
             # self.hand_pose[env_mask] = hand_pose.clone().detach()
         else:
-            self.hand_pose = hand_pose.clone()
+            # Detach from the previous optimization step's graph: each MALA iteration must
+            # backprop through a fresh graph (torch>=2 frees saved tensors after backward(),
+            # so a retained cross-step graph raises "backward through the graph a second time").
+            self.hand_pose = hand_pose.detach().clone().requires_grad_(True)
 
         if self.hand_pose.requires_grad:
             self.hand_pose.retain_grad()
@@ -864,42 +1247,59 @@ class HandModel:
         self.global_rotation = robust_compute_rotation_matrix_from_ortho6d(self.hand_pose[:, 3:9])
         self.current_status = self.fk(self.hand_pose[:, 9:])
 
-        self.penetration_keypoints_expanded = self.penetration_keypoints.unsqueeze(0).expand(self.hand_pose.shape[0], -1, -1)
-        self.global_index_to_link_index_penetration_expanded = self.global_index_to_link_index_penetration.unsqueeze(0).expand(
-            self.hand_pose.shape[0], -1
+        self.penetration_keypoints_expanded = self.penetration_keypoints.unsqueeze(0).expand(
+            self.hand_pose.shape[0], -1, -1
         )
+        self.global_index_to_link_index_penetration_expanded = self.global_index_to_link_index_penetration.unsqueeze(
+            0
+        ).expand(self.hand_pose.shape[0], -1)
         self._set_contact_idxs(contact_point_indices, env_mask=env_mask)
 
-        self.closing_force_des = self.contact_normals.clone()
+        self.closing_force_des = self.contact_normals.clone() if self.contact_normals is not None else None
 
-    def cal_distance(self, x, return_link_lengths=False):
-        """
-        Calculate signed distances from object point clouds to hand surface meshes
+    def cal_distance(self, x, return_link_lengths=False, return_link_index=False):
+        """Signed distance from object points to the hand surface (max over links).
 
-        Interiors are positive, exteriors are negative
+        For each query point the signed distance to every hand link mesh is
+        evaluated and the maximum is returned, i.e. the value of the link that
+        owns/penetrates the point. The sign convention is interior positive,
+        exterior negative, so positive values indicate hand-object penetration.
+        Differentiable w.r.t. the hand pose.
 
-        Use analytical method and our modified Kaolin package
+        Args:
+            x (torch.Tensor): ``(B, N, 3)`` points (typically the object surface
+                point cloud) in world frame (meters).
+            return_link_lengths (bool): Kept for API compatibility.
+            return_link_index (bool): If True, also return a ``(B, N)`` int tensor
+                giving, per query point, the index of the link with the maximal
+                signed distance (the body part that owns/penetrates the point).
+                Indices map into ``list(self.mesh.keys())`` -- read that order via
+                :attr:`link_names`.
 
-        Parameters
-        ----------
-        x: (B, N, 3) torch.Tensor
-            point clouds sampled from object surface
+        Returns:
+            torch.Tensor | tuple: ``(B, N)`` signed distances; when
+            ``return_link_index`` is True, a tuple ``(distances, link_indices)``.
         """
 
         dis = []
+        kept_link_indices = []  # original self.mesh index for each entry appended to `dis`
         x = (x - self.global_translation.unsqueeze(1)) @ self.global_rotation
-
         if SDF_BACKEND == "WARP":
             n_batch = x.shape[0]
             link_poses = torch.stack(
                 [self.current_status[link_name].get_matrix().expand(n_batch, -1, -1) for link_name in self.mesh],
                 dim=1,
-            )
+            )  # (B, n_link, 4, 4): link-local -> hand-root frame, depends on the joints via FK
 
-            link_poses_quat = matrix_to_quaternion(link_poses[:, :, :3, :3])[
-                ..., [1, 2, 3, 0]
-            ].contiguous()  # .detach().clone()
-            link_positions = link_poses[:, :, :3, 3].contiguous()  # .detach().clone()
+            # Transform the query points into each link's LOCAL frame in PyTorch, using rotation
+            # MATRICES (not quaternions). x_local = R_l^T (x - t_l) == (x - t_l) @ R_l for row vectors.
+            # Doing this in torch (instead of inside a warp pose-adjoint kernel + matrix_to_quaternion)
+            # keeps the pose/joint gradient NaN-free; the mesh SDF then only needs to be differentiable
+            # w.r.t. these local points, which CalcSdfFieldBatched supplies analytically.
+            R = link_poses[:, :, :3, :3]  # (B, n_link, 3, 3)
+            t = link_poses[:, :, :3, 3]  # (B, n_link, 3)
+            diff = x.unsqueeze(1) - t.unsqueeze(2)  # (B, n_link, N, 3)
+            x_local = torch.matmul(diff, R)  # (B, n_link, N, 3)
 
             meshes_torch = torch.tensor(
                 [self.mesh[link_name]["face_verts"].id for link_name in self.mesh],
@@ -907,36 +1307,36 @@ class HandModel:
                 device=self.device,
             )
             meshes = wp.array2d(meshes_torch.unsqueeze(0).expand(n_batch, -1), dtype=wp.uint64)
-            dis_local, normals = wp_utils.CalcObjDistances.apply(meshes, link_positions, link_poses_quat, x)
+            dis_local = wp_utils.CalcSdfFieldBatched.apply(meshes, x_local)  # (B, n_link, N) signed
 
-            return (-dis_local).max(dim=1).values
+            # (-dis_local) is (B, n_links, N) signed distance (interior positive). The link with
+            # the maximal signed distance owns the point (deepest penetrator / nearest surface).
+            best = (-dis_local).max(dim=1)
+            if return_link_index:
+                return best.values, best.indices
+            return best.values
 
         for idx, link_name in enumerate(self.mesh):
             matrix = self.current_status[link_name].get_matrix()
             x_local = (x - matrix[:, :3, 3].unsqueeze(1)) @ matrix[:, :3, :3]
             x_local = x_local.reshape(-1, 3)  # (total_batch_size * num_samples, 3)
-
-            # if "middle" not in link_name:
-            #     continue-
-            # checks = ["palm", "link_0", "link_1", "link_2", "link_3"]
             checks = [
-                # "right_hand_link",
-                # "right_hand_back_link",
-                #   "right_hand_thumb_bend_link",
-                #   "right_hand_thumb_rota_link1",
-                #   "right_hand_thumb_rota_link2",
-                #   "right_hand_index_rota_link1",
-                #   "right_hand_index_rota_link2",
-                #   "right_hand_mid_link1",
-                #   "right_hand_ring_link1",
-                #   "right_hand_pinky_link1",
-                #   "right_hand_mid_link2",
-                #   "right_hand_ring_link2",
-                #   "right_hand_pinky_link2",
-                # "right_hand_index_bend_link",
+                # "frontend",
+                # "finger_holder_right",
+                # "finger_holder_left",
+                # "soft_finger_right",
+                # "soft_finger_left",
+                # "g1_29dof_with_hand_rev_1_0_right_hand_index_0_link",
+                # "g1_29dof_with_hand_rev_1_0_right_hand_index_1_link",
+                # "g1_29dof_with_hand_rev_1_0_right_hand_middle_0_link",
+                # "g1_29dof_with_hand_rev_1_0_right_hand_middle_1_link",
+                # "g1_29dof_with_hand_rev_1_0_right_hand_thumb_0_link",
+                # "g1_29dof_with_hand_rev_1_0_right_hand_thumb_1_link",
+                # "g1_29dof_with_hand_rev_1_0_right_hand_thumb_2_link",
+                # "g1_29dof_with_hand_rev_1_0_right_hand_camera_base_link"
             ]
 
-            matches = [check in link_name for check in checks]
+            matches = [check == link_name for check in checks]
             # print("Available links:", link_name)
             if any(matches):
                 print("Skipping", link_name)
@@ -952,20 +1352,23 @@ class HandModel:
                 if SDF_BACKEND == "TORCHSDF":
                     dis_local, dis_signs, _, _ = compute_sdf(x_local, face_verts)
                 elif SDF_BACKEND == "WARP":
-                    # face_verts
-
-                    pts = wp.from_torch(x_local, dtype=wp.vec3)
-
-                    distance_wp, normal_wp = wp_utils.calc_sdf_field(points_wp=pts, mesh_id=face_verts.id)
-                    dis_local = wp.to_torch(distance_wp)
-
+                    # Differentiable + NaN-safe SDF of the object points against this hand link mesh.
+                    # The bare calc_sdf_field crossed the torch<->warp boundary via warp's own autograd
+                    # bridge (wp.from_torch on a grad tensor), which yields a NaN gradient for query
+                    # points that land exactly on the mesh surface. That NaN propagated into the JOINT
+                    # gradient of E_pen and, summed into the total energy, froze the optimizer
+                    # (acceptance -> 0, fingers stuck at the default_state init). CalcSdfField uses the
+                    # analytical grad_dir (guarded at dist<1e-8), identical to the object-model path.
+                    dis_local, _ = wp_utils.CalcSdfField.apply(x_local, face_verts.id, 1e6, False)
                     dis_signs = torch.where(dis_local > 0, 1, -1)
                     dis_local = dis_local**2
                 # ):
                 elif SDF_BACKEND == "KAOLIN":
                     face_indexes = self.mesh[link_name]["faces"]
                     verts = self.mesh[link_name]["vertices"]
-                    dis_local, _, _ = kaolin.metrics.trianglemesh.point_to_mesh_distance(x_local.unsqueeze(0), face_verts)
+                    dis_local, _, _ = kaolin.metrics.trianglemesh.point_to_mesh_distance(
+                        x_local.unsqueeze(0), face_verts
+                    )
                     dis_signs = kaolin.ops.mesh.check_sign(verts.unsqueeze(0), face_indexes, x_local.unsqueeze(0))
                     dis_signs = torch.where(
                         dis_signs,
@@ -980,11 +1383,23 @@ class HandModel:
                 nearest_point = x_local.detach().clone()
                 nearest_point[:, :2] = 0
                 nearest_point[:, 2] = torch.clamp(nearest_point[:, 2], 0, height)
-                dis_local = radius - (x_local - nearest_point).norm(dim=1)
+                # Epsilon-safe norm: a plain .norm() has a 0/0 = NaN gradient when the query point
+                # lies exactly on the capsule axis (x_local == nearest_point). That NaN propagates
+                # into the JOINT gradient of E_pen and, summed into the total energy, poisons the
+                # optimizer (acceptance collapses / fingers freeze at init). sqrt(sum(d^2)+eps) is
+                # smooth everywhere (grad -> 0 as d -> 0 instead of NaN).
+                _d = x_local - nearest_point
+                dis_local = radius - torch.sqrt((_d * _d).sum(dim=1) + 1e-8)
 
             dis.append(dis_local.reshape(x.shape[0], x.shape[1]))
-        dis = torch.max(torch.stack(dis, dim=0), dim=0)[0]
-        return dis
+            kept_link_indices.append(idx)
+        stacked = torch.stack(dis, dim=0)  # (K, B, N), K = number of kept links
+        best = torch.max(stacked, dim=0)
+        if return_link_index:
+            # Map the kept-list argmax back to the original self.mesh ordering.
+            kept = torch.tensor(kept_link_indices, device=stacked.device)
+            return best.values, kept[best.indices]
+        return best.values
 
     def self_penetration(self):
         """
@@ -1014,7 +1429,9 @@ class HandModel:
             n_surface_points = self.mesh[link_name]["penetration_keypoints"].shape[0]
             if n_surface_points == 0:
                 continue
-            points.append(self.current_status[link_name].transform_points(self.mesh[link_name]["penetration_keypoints"]))
+            points.append(
+                self.current_status[link_name].transform_points(self.mesh[link_name]["penetration_keypoints"])
+            )
             points[-1] = points[-1] @ self.global_rotation.transpose(1, 2) + self.global_translation.unsqueeze(1)
             lengths.append(n_surface_points)
 
@@ -1071,6 +1488,23 @@ class HandModel:
         return points
 
     def get_manipulability(self, moving_directions, contact_point_indices=None, coupled=True):
+        """Manipulability residual for moving contacts in given directions.
+
+        Solves for the joint velocities that best realize the requested Cartesian
+        contact-point velocities (least squares) and returns the residual error;
+        a small residual means the requested motion is achievable by the hand.
+
+        Args:
+            moving_directions (torch.Tensor): ``(B, n_contact, 3)`` desired
+                contact-point velocity directions in world frame.
+            contact_point_indices (torch.Tensor | None): ``(B, n_contact)``
+                contact selection; defaults to all candidates when None.
+            coupled (bool): If True, solve all contacts jointly; otherwise per
+                contact and average the residual.
+
+        Returns:
+            torch.Tensor: Residual error of the least-squares velocity solve.
+        """
         _, residuals = self.get_req_joint_velocities(moving_directions, contact_point_indices, coupled=coupled)
         if not coupled:
             residuals = residuals.mean(-1)
@@ -1279,7 +1713,9 @@ class HandModel:
         batch_size = self.global_translation.shape[0]
         for link_name in self.mesh:
             n_surface_points = self.mesh[link_name]["penetration_keypoints"].shape[0]
-            points.append(self.current_status[link_name].transform_points(self.mesh[link_name]["penetration_keypoints"]))
+            points.append(
+                self.current_status[link_name].transform_points(self.mesh[link_name]["penetration_keypoints"])
+            )
             if 1 < batch_size != points[-1].shape[0]:
                 points[-1] = points[-1].expand(batch_size, n_surface_points, 3)
         points = torch.cat(points, dim=-2).to(self.device)
@@ -1297,6 +1733,8 @@ class HandModel:
         with_penetration_points=False,
         simplify=False,
         offset=[0, 0, 0],
+        legendgroup=None,
+        showlegend=None,
     ):
         """
         Get visualization data for plotly.graph_objects
@@ -1322,6 +1760,7 @@ class HandModel:
         if pose is not None:
             pose = np.array(pose, dtype=np.float32)
         data = []
+        name_prefix = f"{legendgroup} - " if legendgroup is not None else ""
         for idx, link_name in enumerate(self.mesh):
             v = self.current_status[link_name].transform_points(self.mesh[link_name]["vertices"])
             if len(v.shape) == 3:
@@ -1347,6 +1786,7 @@ class HandModel:
             if offset is not None:
                 v += np.array(offset)
 
+            trace_name = name_prefix  # + link_name
             data.append(
                 go.Mesh3d(
                     x=v[:, 0],
@@ -1357,9 +1797,9 @@ class HandModel:
                     k=f[:, 2],
                     color=color,
                     opacity=opacity,
-                    name=link_name,
-                    showlegend=True,
-                    # legendgroup="hand",
+                    name=trace_name,
+                    legendgroup=legendgroup if legendgroup is not None else None,
+                    showlegend=(True and idx == 0) if showlegend is None else showlegend,
                 )
             )
         if with_contact_points:
@@ -1368,6 +1808,7 @@ class HandModel:
                 contact_points = contact_points @ pose[:3, :3].T + pose[:3, 3]
             if offset is not None:
                 contact_points += np.array(offset)
+            trace_name = name_prefix + "contact_points"
             data.append(
                 go.Scatter3d(
                     x=contact_points[:, 0],
@@ -1375,8 +1816,9 @@ class HandModel:
                     z=contact_points[:, 2],
                     mode="markers",
                     marker=dict(color="red", size=5),
-                    legendgroup="contact_points",
-                    name="contact_points",
+                    legendgroup=legendgroup if legendgroup is not None else "contact_points",
+                    name=trace_name,
+                    showlegend=True if showlegend is None else showlegend,
                 )
             )
 
@@ -1441,6 +1883,7 @@ class HandModel:
                 surface_points += offset
             # if pose is not None:
             #     surface_points = surface_points @ pose[:3, :3].T + pose[:3, 3]
+            trace_name = name_prefix + "surface_points"
             data.append(
                 go.Scatter3d(
                     x=surface_points[:, 0],
@@ -1448,8 +1891,9 @@ class HandModel:
                     z=surface_points[:, 2],
                     mode="markers",
                     marker=dict(color="green", size=5),
-                    legendgroup="surface_points",
-                    name="surface_points",
+                    legendgroup=legendgroup if legendgroup is not None else "surface_points",
+                    name=trace_name,
+                    showlegend=True if showlegend is None else showlegend,
                 )
             )
         return data
@@ -1488,6 +1932,7 @@ class HandModel:
         ee_vel=None,
         idx=0,
         others=[],
+        return_data=False,
     ):
         """
         Visualize hand model
@@ -1625,5 +2070,21 @@ class HandModel:
                         )
                     ]
 
+        if return_data:
+            return data
+
         fig = go.Figure(data=data)
+        # fix aspect ratio, to not distort the visualization
+        # update axis limits from -0.2 to 0.2
+        fig.update_layout(
+            scene=dict(
+                xaxis=dict(nticks=4, range=[-0.2, 0.2]),
+                yaxis=dict(nticks=4, range=[-0.2, 0.2]),
+                zaxis=dict(nticks=4, range=[-0.2, 0.2]),
+            )
+        )
+        try:
+            fig.update_layout(scene=dict(aspectmode="data"))
+        except Exception:
+            pass
         fig.show()
