@@ -37,7 +37,9 @@ from graspqp_isaaclab.models.object_model import (
     create_mesh_from_geom_shape,
     create_trimesh_from_geom_mesh,
 )
-from isaaclab.utils.warp import convert_to_warp_mesh
+# Use graspqp's own convert_to_warp_mesh (supports `support_winding_number`); the stock
+# isaaclab.utils.warp version does not accept that argument. Matches object_model.py.
+from graspqp_isaaclab.utils.warp import convert_to_warp_mesh
 
 import numpy as np
 

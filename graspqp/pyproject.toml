@@ -6,7 +6,11 @@ requires = ["setuptools>=61.0", "wheel>=0.37.1"]
 name = "graspqp"
 version = "0.0.1"
 description = "GraspQP: differentiable force-closure grasp synthesis for dexterous hands"
-readme = "../README.md"
+# NOTE: the project README lives at the repository root (../README.md), which is outside this
+# package directory. Modern setuptools refuses to read a readme file outside the project dir
+# (and it would break the source tarball / editable installs), so we inline a short description
+# here. See the repository README for full documentation.
+readme = {text = "GraspQP: differentiable optimization of force closure for diverse and robust dexterous grasping. See the repository README for full documentation.", content-type = "text/markdown"}
 requires-python = ">=3.10"
 authors = [
     {name = "René Zurbrügg", email = "rene.zurbruegg@inf.ethz.ch"},
