@@ -518,8 +518,9 @@ class ArticulationModel(Articulation, ListComponent):
                     warp_mesh = ArticulationModel.meshes[prim_path][i][0]
                     pts = wp.to_torch(warp_mesh.points).to(self.device)
                     vertices = wp.to_torch(warp_mesh.indices).to(self.device)
-                    from pytorch3d.ops import sample_points_from_meshes
-                    from pytorch3d.structures import Meshes
+                    # Use the compat shim so this works without pytorch3d (WARP-native path);
+                    # it falls back to a pure-PyTorch implementation when pytorch3d is absent.
+                    from graspqp.core.pytorch3d_compat import Meshes, sample_points_from_meshes
 
                     mesh = Meshes(verts=[pts], faces=[vertices.view(-1, 3).float()])
                     sampled_pts, sampled_normals = sample_points_from_meshes(

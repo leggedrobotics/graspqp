@@ -92,6 +92,11 @@ pip install -e .
 Notes:
 
 - **Default SDF backend is WARP** (no compilation). Switch via `export SDF_BACKEND=WARP|TORCHSDF|KAOLIN`; `TORCHSDF`/`KAOLIN` require the full install.
+- **The WARP path needs no compiled extensions.** With the default WARP backend, `TorchSDF`,
+  `Kaolin` and even `pytorch3d` are all optional: TorchSDF/Kaolin are only imported for their
+  respective `SDF_BACKEND`, and mesh/point sampling falls back to a pure-PyTorch implementation
+  (`graspqp.core.pytorch3d_compat`) when `pytorch3d` is absent. The full grasp-synthesis
+  pipeline (`scripts/fit.py`) runs end-to-end on a `[lite]` install with none of them present.
 - The lightweight `[lite]` install needs no CUDA toolkit — WARP ships wheels and `pytorch_kinematics` is pure Python. Only `[full]` (TorchSDF/pytorch3d) invokes `nvcc`.
 - Ensure your CUDA drivers match the installed PyTorch.
 - Use an **editable** install (`pip install -e`): the bundled robot assets (URDFs, meshes,

@@ -315,7 +315,8 @@ def resolve_assets(
         )
 
         if use_fps and num_grasps > 1:
-            from pytorch3d.ops.sample_farthest_points import sample_farthest_points
+            # compat shim: works without pytorch3d (falls back to pytorch_cluster / native FPS)
+            from graspqp.core.pytorch3d_compat import sample_farthest_points
 
             # Reduce to num_grasps using fps
             top_poses = pose[: 3 * num_grasps]
