@@ -18,6 +18,17 @@
 
 This is the official implementation of “GraspQP: Differentiable Optimization of Force Closure for Diverse and Robust Dexterous Grasping” (CoRL 2025).
 
+> ### ⚠️ Isaac Lab stack update
+> The `graspqp_isaaclab` simulation package and the Docker stack now target **Isaac Sim 5.1 /
+> Isaac Lab 2.3** (PyTorch 2.7 + CUDA 12.8, Python 3.11). This brings API changes (e.g.
+> `isaaclab.ui.components`, the `Articulation._create_data` hook, `ComponentCfg` scene entities)
+> that older Isaac Lab releases do not provide.
+>
+> - The lightweight **WARP-only `graspqp`** install (no simulator) is unaffected — it still runs
+>   on Python 3.10+ / CUDA 12.x.
+> - If you need the **previous Isaac Sim 4.5 / Isaac Lab 2.x** stack, use the
+>   [`isaacsim-4.5`](../../releases/tag/isaacsim-4.5) tag: `git checkout isaacsim-4.5`.
+
 ## Abstract
 
 GraspQP synthesizes diverse, robust dexterous grasps by optimizing a differentiable energy that encodes force closure via a quadratic program (QP). Coupling analytic hand kinematics and contact models with signed-distance fields enables gradient-based optimization over hand pose and joint angles. The method generalizes across hands and object categories, produces both precision and power grasps, and integrates with simulation for large-scale evaluation.
