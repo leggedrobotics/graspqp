@@ -19,15 +19,17 @@
 This is the official implementation of “GraspQP: Differentiable Optimization of Force Closure for Diverse and Robust Dexterous Grasping” (CoRL 2025).
 
 > ### ⚠️ Isaac Lab stack update
-> The `graspqp_isaaclab` simulation package and the Docker stack now target **Isaac Sim 5.1 /
-> Isaac Lab 2.3** (PyTorch 2.7 + CUDA 12.8, Python 3.11). This brings API changes (e.g.
+> Most changes on this branch target the **integration with [DexEvolve](https://github.com/leggedrobotics/DexEvolve)**:
+> the `graspqp_isaaclab` simulation package and the Docker stack now target **Isaac Sim 5.1 /
+> Isaac Lab 2.3** (PyTorch 2.7 + CUDA 12.8, Python 3.11), bringing API changes (e.g.
 > `isaaclab.ui.components`, the `Articulation._create_data` hook, `ComponentCfg` scene entities)
 > that older Isaac Lab releases do not provide.
 >
 > - The lightweight **WARP-only `graspqp`** install (no simulator) is unaffected — it still runs
 >   on Python 3.10+ / CUDA 12.x.
-> - If you need the **previous Isaac Sim 4.5 / Isaac Lab 2.x** stack, use the
->   [`graspqp`](../../releases/tag/graspqp) tag: `git checkout tags/graspqp`.
+> - **For faithful reproduction of the GraspQP (CoRL 2025) paper** — or the previous Isaac Sim
+>   4.5 / Isaac Lab 2.x stack — check out the [`graspqp`](../../releases/tag/graspqp) tag:
+>   `git checkout tags/graspqp`.
 
 ## Abstract
 
