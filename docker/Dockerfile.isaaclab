@@ -2,30 +2,25 @@
 #
 # GraspQP -- Isaac Lab image (graspqp_isaaclab).
 #
-# Builds on top of the standard `isaac-lab-base` image (Isaac Lab / Isaac Sim), adding a
-# matching CUDA toolkit and the full GraspQP stack so the simulator tooling
-# (graspqp_isaaclab tasks, scripts/isaaclab/*) works. This is the base image that DexEvolve
-# (and any other Isaac Lab downstream) builds on.
+# Builds on top of the standard `isaac-lab-base` image (Isaac Lab / Isaac Sim). This is the base
+# image the simulator tooling (graspqp_isaaclab tasks, scripts/isaaclab/*) and downstream
+# projects (e.g. DexEvolve) build on.
 #
-#   - CUDA toolkit (nvcc) matched to the base image's PyTorch build (see CUDA_PKG below)
-#   - Kaolin              (prebuilt wheel matched to the base's torch/cuda)
-#   - PyTorch3D           (compiled from source -- HARD dependency: mesh/contact sampling)
-#   - pytorch_kinematics + TorchSDF  (from the bundled thirdparty/ submodules)
-#   - graspqp + graspqp_isaaclab     (editable installs)
+# By DEFAULT this is a lightweight **WARP-only** image: the default WARP SDF backend needs no
+# compiled extensions, so the CUDA toolkit, Kaolin, PyTorch3D and TorchSDF are NOT installed
+# (mesh/point sampling, FPS and ball_query fall back to pure-PyTorch via
+# `graspqp.core.pytorch3d_compat`). It builds in a couple of minutes with no `nvcc` compilation.
 #
-# NOTE (torch/cuda coupling): the compiled deps (pytorch3d, TorchSDF, kaolin) MUST match the
-# PyTorch that ships in `isaac-lab-base`. The defaults below target Isaac Sim 5.1 (IsaacLab
-# 2.3), whose base image ships **torch 2.7 + cu128** (verify with
-# `python -c "import torch;print(torch.__version__)"`). If you build on an older Isaac Sim 4.5
-# base (torch 2.5.1 + cu118) override the build args: CUDA_PKG=cuda-toolkit-11-8,
-# CUDA_HOME_DIR=/usr/local/cuda-11.8, KAOLIN_INDEX=.../torch-2.5.1_cu118.html, and drop 9.0
-# from TORCH_CUDA_ARCH_LIST.
+# Pass `--build-arg WITH_COMPILED_BACKENDS=1` to additionally install the CUDA toolkit + Kaolin +
+# PyTorch3D + TorchSDF. Those are only needed for `SDF_BACKEND=TORCHSDF|KAOLIN` and the
+# pytorch3d-accelerated sampling path, and they MUST match the base image's PyTorch build:
+# the defaults target Isaac Sim 5.1 (torch 2.7 + cu128); for an Isaac Sim 4.5 base
+# (torch 2.5.1 + cu118) also override CUDA_PKG=cuda-toolkit-11-8, CUDA_HOME_DIR=/usr/local/cuda-11.8,
+# KAOLIN_INDEX=.../torch-2.5.1_cu118.html and drop 9.0 from TORCH_CUDA_ARCH_LIST.
 #
 # Build (context = repo root):
-#   ./docker/build_isaaclab_docker.sh                 # -> image `graspqp_isaaclab`
-# or manually:
-#   docker build -f docker/Dockerfile.isaaclab -t graspqp_isaaclab \
-#       --build-arg ISAACLAB_BASE_IMAGE_ARG=isaac-lab-base .
+#   ./docker/build_isaaclab_docker.sh                            # WARP-only (default)
+#   WITH_COMPILED_BACKENDS=1 ./docker/build_isaaclab_docker.sh   # + compiled backends
 #
 # Prerequisite: the `isaac-lab-base` image must already exist (build it from an Isaac Lab
 # checkout, e.g. `./docker/container.py start base` in the Isaac Lab repo).
@@ -36,71 +31,72 @@ FROM ${ISAACLAB_BASE_IMAGE_ARG} AS base
 ARG GRASPQP_PATH_ARG=/workspace/graspqp
 ENV GRASPQP_PATH=${GRASPQP_PATH_ARG}
 
-# --- torch/cuda coupling knobs (defaults target Isaac Sim 5.1 -> torch 2.7 + cu128) --------
-# For an Isaac Sim 4.5 base (torch 2.5.1 + cu118) override with:
-#   CUDA_PKG=cuda-toolkit-11-8 CUDA_HOME_DIR=/usr/local/cuda-11.8 \
-#   KAOLIN_INDEX=https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.5.1_cu118.html \
-#   TORCH_CUDA_ARCH_LIST='7.5;8.0;8.6;8.9'
+# Default: WARP-only (no compiled backends). Set to 1 to install CUDA toolkit + kaolin +
+# pytorch3d + TorchSDF.
+ARG WITH_COMPILED_BACKENDS=0
+
+# --- torch/cuda coupling knobs (only used when WITH_COMPILED_BACKENDS=1) --------------------
 ARG CUDA_PKG=cuda-toolkit-12-8
 ARG CUDA_HOME_DIR=/usr/local/cuda-12.8
 ARG KAOLIN_INDEX=https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.7.0_cu128.html
-# Ada (sm_89) is our target GPU; include Hopper (sm_90, needs cu12x) for completeness.
 ARG TORCH_CUDA_ARCH_LIST="7.5;8.0;8.6;8.9;9.0"
 
 USER root
 
-# --- CUDA toolkit (nvcc) from NVIDIA's network repo, matched to the base's torch -----------
+# --- (optional) CUDA toolkit (nvcc) from NVIDIA's network repo -----------------------------
 RUN --mount=type=cache,target=/var/cache/apt \
-    apt-get update && apt-get install -y --no-install-recommends curl ca-certificates gnupg && \
-    curl -fsSL -o /tmp/cuda-keyring.deb \
+    if [ "${WITH_COMPILED_BACKENDS}" = "1" ]; then \
+      apt-get update && apt-get install -y --no-install-recommends curl ca-certificates gnupg && \
+      curl -fsSL -o /tmp/cuda-keyring.deb \
         https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb && \
-    dpkg -i /tmp/cuda-keyring.deb && rm -f /tmp/cuda-keyring.deb && \
-    apt-get update && apt-get install -y --no-install-recommends ${CUDA_PKG} && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+      dpkg -i /tmp/cuda-keyring.deb && rm -f /tmp/cuda-keyring.deb && \
+      apt-get update && apt-get install -y --no-install-recommends ${CUDA_PKG} && \
+      apt-get clean && rm -rf /var/lib/apt/lists/*; \
+    else echo "[WARP-only] skipping CUDA toolkit"; fi
 
 ENV CUDA_HOME=${CUDA_HOME_DIR}
 ENV PATH=${CUDA_HOME_DIR}/bin:${PATH}
 
-# --- Make torch's bundled CUDA libs discoverable by build subprocesses ---------------------
-# The source builds below (pytorch3d, TorchSDF) run `import torch` in a bare-interpreter pip
-# subprocess that does NOT go through Isaac Sim's python.sh wrapper, so it lacks the
-# LD_LIBRARY_PATH that lets torch 2.7/cu128 find e.g. libcusparseLt.so.0. Append a
-# python-version-agnostic export (torch's bundled nvidia/*/lib + torch/lib) to ~/.bashrc so
-# every subsequent `source ~/.bashrc` build step (and its subprocesses) can load torch._C.
+# --- Make torch's bundled CUDA libs discoverable by build subprocesses (compiled builds) ----
+# pytorch3d/TorchSDF run `import torch` in a bare-interpreter pip subprocess that lacks Isaac
+# Sim's python.sh LD_LIBRARY_PATH (so torch 2.7/cu128 can't find e.g. libcusparseLt.so.0).
+# Append torch's bundled lib dirs to ~/.bashrc (harmless for the WARP-only build).
 RUN echo 'export LD_LIBRARY_PATH=$(ls -d /isaac-sim/kit/python/lib/python3.*/site-packages/nvidia/*/lib /isaac-sim/kit/python/lib/python3.*/site-packages/torch/lib 2>/dev/null | tr "\n" ":")$LD_LIBRARY_PATH' >> ${HOME}/.bashrc
 
-# --- Kaolin (prebuilt wheel matching the base image's torch/cuda) --------------------------
+# --- (optional) Kaolin (prebuilt wheel) + PyTorch3D (compiled from source) ------------------
 RUN --mount=type=cache,target=/root/.cache/pip \
-    bash -i -c "source ${HOME}/.bashrc && \
-    pip install --find-links ${KAOLIN_INDEX} kaolin==0.18.0"
-
-# --- PyTorch3D (compiled from source; hard dependency) ------------------------------------
-RUN --mount=type=cache,target=/root/.cache/pip \
-    bash -i -c "source ${HOME}/.bashrc && \
-    TORCH_CUDA_ARCH_LIST='${TORCH_CUDA_ARCH_LIST}' FORCE_CUDA=1 \
-    python -m pip install --no-build-isolation git+https://github.com/facebookresearch/pytorch3d.git@stable"
+    if [ "${WITH_COMPILED_BACKENDS}" = "1" ]; then \
+      bash -i -c "source ${HOME}/.bashrc && \
+        pip install --find-links ${KAOLIN_INDEX} kaolin==0.18.0 && \
+        TORCH_CUDA_ARCH_LIST='${TORCH_CUDA_ARCH_LIST}' FORCE_CUDA=1 \
+        python -m pip install --no-build-isolation git+https://github.com/facebookresearch/pytorch3d.git@stable"; \
+    else echo "[WARP-only] skipping kaolin + pytorch3d"; fi
 
 # --- GraspQP stack ------------------------------------------------------------------------
 COPY . ${GRASPQP_PATH}
 
-# Bundled thirdparty submodules (editable) -- satisfy the pytorch_kinematics / TorchSDF git
-# deps declared in graspqp's pyproject so the graspqp install below reuses them.
+# pytorch_kinematics is pure-Python -> always installed (no CUDA toolkit needed).
 RUN --mount=type=cache,target=/root/.cache/pip bash -i -c "source ${HOME}/.bashrc && \
-    cd ${GRASPQP_PATH}/thirdparty/pytorch_kinematics && pip install -e . && \
-    cd ${GRASPQP_PATH}/thirdparty/TorchSDF && \
-    TORCH_CUDA_ARCH_LIST='${TORCH_CUDA_ARCH_LIST}' FORCE_CUDA=1 pip install -e . --no-build-isolation"
+    cd ${GRASPQP_PATH}/thirdparty/pytorch_kinematics && pip install -e ."
+
+# --- (optional) TorchSDF (compiled SDF backend) -------------------------------------------
+RUN --mount=type=cache,target=/root/.cache/pip \
+    if [ "${WITH_COMPILED_BACKENDS}" = "1" ]; then \
+      bash -i -c "source ${HOME}/.bashrc && cd ${GRASPQP_PATH}/thirdparty/TorchSDF && \
+        TORCH_CUDA_ARCH_LIST='${TORCH_CUDA_ARCH_LIST}' FORCE_CUDA=1 pip install -e . --no-build-isolation"; \
+    else echo "[WARP-only] skipping TorchSDF"; fi
 
 # graspqp_isaaclab (Isaac Lab extension) + graspqp core (editable so bundled assets resolve).
 RUN --mount=type=cache,target=/root/.cache/pip bash -i -c "source ${HOME}/.bashrc && \
     cd ${GRASPQP_PATH}/graspqp_isaaclab/src && pip install -e . && \
     cd ${GRASPQP_PATH}/graspqp && pip install -e '.[lite]'"
 
-# --- Make torch's bundled CUDA libs discoverable at RUNTIME ---------------------------------
+# --- Make torch's bundled CUDA libs discoverable at RUNTIME (ALWAYS) ------------------------
 # On a torch 2.7/cu128 base, Isaac Sim's native modules link against libcusparseLt.so.0 (and
 # other libs) that ship inside torch's site-packages (nvidia/*/lib). When the app is launched
 # via `isaaclab.sh -p` (bypassing Isaac Sim's own entrypoint) those dirs are not on the loader
-# path, causing `ImportError: libcusparseLt.so.0: cannot open shared object file`. Register them
-# with ldconfig (lowest linker precedence, so it never shadows Isaac Sim's own libs).
+# path, causing `ImportError: libcusparseLt.so.0`. Register them with ldconfig (lowest linker
+# precedence, so it never shadows Isaac Sim's own libs). Needed even for the WARP-only image.
 RUN bash -c 'ls -d /isaac-sim/kit/python/lib/python3.*/site-packages/nvidia/*/lib \
         /isaac-sim/kit/python/lib/python3.*/site-packages/torch/lib 2>/dev/null \
         > /etc/ld.so.conf.d/torch-bundled-nvidia.conf && ldconfig'

@@ -116,12 +116,12 @@ We provide three Dockerfiles (build with the repo root as context):
   base — **no `nvcc`, no source compilation** — installing only WARP + `pytorch_kinematics`.
 - **`docker/Dockerfile.torchsdf`** (full): all backends (WARP + TorchSDF + Kaolin). Builds on a
   CUDA **devel** base because TorchSDF/pytorch3d are compiled from source with `nvcc`.
-- **`docker/Dockerfile.isaaclab`** (simulator): the `graspqp_isaaclab` image — the full stack
-  (CUDA toolkit + kaolin + pytorch3d + TorchSDF + graspqp + `graspqp_isaaclab`) on top of an
-  `isaac-lab-base` image. This is the base the Isaac Lab tooling (`scripts/isaaclab/*`) and
-  downstream projects (e.g. DexEvolve) build on. Build it with the helper (below); it needs an
-  `isaac-lab-base` image from **Isaac Lab 2.3 / Isaac Sim 5.1** (torch 2.7 + cu128) — defaults
-  target that; override the CUDA/kaolin build args for an Isaac Sim 4.5 base.
+- **`docker/Dockerfile.isaaclab`** (simulator): the `graspqp_isaaclab` image — graspqp +
+  `graspqp_isaaclab` on top of an `isaac-lab-base` image (from **Isaac Lab 2.3 / Isaac Sim 5.1**,
+  torch 2.7 + cu128). This is the base the Isaac Lab tooling (`scripts/isaaclab/*`) and
+  downstream projects (e.g. DexEvolve) build on. **Defaults to a WARP-only build** (no CUDA
+  toolkit / pytorch3d / TorchSDF / Kaolin — no `nvcc`, ~2 min); pass `WITH_COMPILED_BACKENDS=1`
+  to add them (needed only for `SDF_BACKEND=TORCHSDF|KAOLIN`).
 
 ```bash
 # clone (repo root is the build context)
@@ -138,7 +138,8 @@ docker run --rm --gpus all -e SDF_BACKEND=TORCHSDF -it graspqp:full   # or WARP 
 
 # Isaac Lab image (graspqp_isaaclab) — requires an `isaac-lab-base` image to already exist
 # (build it from an Isaac Lab 2.3 / Isaac Sim 5.1 checkout, e.g. `./docker/container.py start base`)
-./docker/build_isaaclab_docker.sh          # -> image `graspqp_isaaclab`
+./docker/build_isaaclab_docker.sh                            # WARP-only (default, ~2 min)
+WITH_COMPILED_BACKENDS=1 ./docker/build_isaaclab_docker.sh   # + pytorch3d/TorchSDF/kaolin
 docker run --rm --gpus all -e ACCEPT_EULA=Y --entrypoint bash -it graspqp_isaaclab
 ```
 
