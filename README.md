@@ -94,12 +94,18 @@ Notes:
 <details>
 <summary><b>Docker installation</b></summary>
 
-We provide two Dockerfiles (build with the repo root as context):
+We provide three Dockerfiles (build with the repo root as context):
 
 - **`docker/Dockerfile`** (default, lightweight): WARP backend only. Builds on a CUDA **runtime**
   base — **no `nvcc`, no source compilation** — installing only WARP + `pytorch_kinematics`.
 - **`docker/Dockerfile.torchsdf`** (full): all backends (WARP + TorchSDF + Kaolin). Builds on a
   CUDA **devel** base because TorchSDF/pytorch3d are compiled from source with `nvcc`.
+- **`docker/Dockerfile.isaaclab`** (simulator): the `graspqp_isaaclab` image — the full stack
+  (CUDA toolkit + kaolin + pytorch3d + TorchSDF + graspqp + `graspqp_isaaclab`) on top of an
+  `isaac-lab-base` image. This is the base the Isaac Lab tooling (`scripts/isaaclab/*`) and
+  downstream projects (e.g. DexEvolve) build on. Build it with the helper (below); it needs an
+  `isaac-lab-base` image from **Isaac Lab 2.3 / Isaac Sim 5.1** (torch 2.7 + cu128) — defaults
+  target that; override the CUDA/kaolin build args for an Isaac Sim 4.5 base.
 
 ```bash
 # clone (repo root is the build context)
@@ -113,6 +119,11 @@ docker run --rm --gpus all -it graspqp:warp
 # Full image with all SDF backends (needs a CUDA toolkit at build time)
 docker build -f docker/Dockerfile.torchsdf -t graspqp:full .
 docker run --rm --gpus all -e SDF_BACKEND=TORCHSDF -it graspqp:full   # or WARP / KAOLIN
+
+# Isaac Lab image (graspqp_isaaclab) — requires an `isaac-lab-base` image to already exist
+# (build it from an Isaac Lab 2.3 / Isaac Sim 5.1 checkout, e.g. `./docker/container.py start base`)
+./docker/build_isaaclab_docker.sh          # -> image `graspqp_isaaclab`
+docker run --rm --gpus all -e ACCEPT_EULA=Y --entrypoint bash -it graspqp_isaaclab
 ```
 
 Both default to `SDF_BACKEND=WARP`. The base image tag (torch/CUDA) is overridable via
