@@ -27,7 +27,7 @@ This is the official implementation of “GraspQP: Differentiable Optimization o
 > - The lightweight **WARP-only `graspqp`** install (no simulator) is unaffected — it still runs
 >   on Python 3.10+ / CUDA 12.x.
 > - If you need the **previous Isaac Sim 4.5 / Isaac Lab 2.x** stack, use the
->   [`isaacsim-4.5`](../../releases/tag/isaacsim-4.5) tag: `git checkout isaacsim-4.5`.
+>   [`graspqp`](../../releases/tag/graspqp) tag: `git checkout tags/graspqp`.
 
 ## Abstract
 
