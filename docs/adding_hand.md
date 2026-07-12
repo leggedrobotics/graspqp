@@ -144,7 +144,7 @@ Use this key (e.g., `schunk2`) with visualization and other scripts.
 Run the following to visualize the hand:
 
 ```bash
-python scripts/visualize_hand_model.py --hand_name schunk2
+python scripts/vis/visualize_hand_model.py --hand_name schunk2
 ```
 
 This should show your hand and the current origin.
@@ -173,7 +173,7 @@ If needed, adjust the hand’s base pose to match these conventions. For example
 Re-run the visualization command:
 
 ```bash
-python scripts/visualize_hand_model.py --hand_name schunk2
+python scripts/vis/visualize_hand_model.py --hand_name schunk2
 ```
 
 The hand should now be aligned correctly:
@@ -185,7 +185,7 @@ The hand should now be aligned correctly:
 To visualize the SDF-based occupancy near collision geometry, add the occupancy grid flag:
 
 ```bash
-python scripts/visualize_hand_model.py --hand_name schunk2 --show_occupancy_grid
+python scripts/vis/visualize_hand_model.py --hand_name schunk2 --show_occupancy_grid
 ```
 
 This samples points on an evenly spaced grid around the hand and visualizes points very close to or inside collision meshes. If collision meshes are incorrect, the occupancy grid may not align with the hand model, showing gaps or floating points.
@@ -193,35 +193,24 @@ This samples points on an evenly spaced grid around the hand and visualizes poin
 For example, the default collision meshes for the Schunk EGU-50 are corrupted:
 
 ```bash
-python scripts/visualize_hand_model.py --hand_name schunk2 --show_occupancy_grid
+python scripts/vis/visualize_hand_model.py --hand_name schunk2 --show_occupancy_grid
 ```
 
 <img src="image-2.png" alt="Corrupted collision meshes" width="640" />
 
-To fix this, remesh the collision meshes in Blender using the smooth modifier (click on the image to watch the video):
-
-[![Watch the video](https://img.youtube.com/vi/nz_PZ0RDFCU/0.jpg)](https://youtu.be/nz_PZ0RDFCU)
-
-<!-- <video width="640" height="360" controls>
-
-  <source src="">
-  Your browser does not support the video tag.
-</video> -->
+To fix this, remesh the collision meshes in Blender (smooth / remesh modifier).
+See [Remeshing in Blender — Part 1](remeshing_in_blender.md#part-1--fixing-collision-meshes)
+for the step-by-step workflow. After remeshing, the occupancy grid should align
+with the hand:
 
 <img src="image-3.png" alt="Correctly Aligned Hand and Collision Meshes" width="640" />
 
 ### 7. Provide contact and penetration configs
 
-For each link that should be used for contact sampling, extract meshes to sample contact points and place them in the `meshes/contacts/` folder.
-Example:
-
-[![Video for contact meshes](https://img.youtube.com/vi/Jjc_0q2Zi3E/0.jpg)](https://youtu.be/Jjc_0q2Zi3E)
-
-<!-- <video width="640" height="360" controls>
-
-  <source src="contact_meshes.mp4" type="video/mp4">
-  Your browser does not support the video tag.
-</video> -->
+For each link that should be used for contact sampling, extract meshes to sample
+contact points and place them in the `meshes/contacts/` folder. See
+[Remeshing in Blender — Part 2](remeshing_in_blender.md#part-2--extracting-contact-meshes)
+for how to cut out contact regions in Blender.
 
 Then, register these meshes in `contact_points.json` with the number of contact points to sample from each mesh.
 
@@ -245,7 +234,7 @@ For `penetration_points.json`, use a similar structure to define collision spher
 Finally, once contact points are defined, visualize them:
 
 ```bash
-python scripts/visualize_hand_model.py --hand_name schunk2
+python scripts/vis/visualize_hand_model.py --hand_name schunk2
 ```
 
 Green dots indicate the contact points sampled on the hand links.
@@ -342,7 +331,7 @@ def getHandModel(device: str, asset_dir: str, **kwargs) -> HandModel:
 Use the viewer to inspect the hand. `--show_jacobian` visualizes the hand jacobian; `--randomize_joints` loads a random configuration.
 
 ```bash
-python scripts/visualize_hand_model.py --hand_name schunk2 --show_jacobian --randomize_joints
+python scripts/vis/visualize_hand_model.py --hand_name schunk2 --show_jacobian --randomize_joints
 ```
 
 The result (for the Schunk EGU-50) should look like this:
@@ -370,17 +359,37 @@ You can define named grasp types that map to different per-link contact sampling
 Visualize a specific grasp type:
 
 ```bash
-python scripts/visualize_hand_model.py --hand_name schunk2 --grasp_type pinch
+python scripts/vis/visualize_hand_model.py --hand_name schunk2 --grasp_type pinch
 ```
 
 ### 11. Fit/generate contact points on a dataset (optional)
 
-Optionally, run the fitter to generate/update contact points on a dataset:
+Optionally, run the fitter to generate grasps (and contact points) on a dataset:
 
 ```bash
-python scripts/fit.py --data_root_path /<path_to_dataset>/full --hand_name schunk2
+python scripts/fit.py \
+    --data_root_path /path/to/data --dataset full \
+    --hand_name schunk2 --energy_type graspqp --n_contact 12
 ```
+
+See [`scripts/README.md`](../scripts/README.md) for the full list of `fit.py`
+flags.
 
 ## Troubleshooting
 
-- Collisions not working as expected? Ensure `<collision>` meshes reference `collisions/...` and that files exist. Verify validity with the occupancy grid visualization. If needed, remesh in Blender.
+- **Collisions not working as expected?** Ensure `<collision>` meshes reference
+  `collisions/...` and that the files exist. Verify with the occupancy-grid
+  visualization (`--show_occupancy_grid`). If the grid is corrupted, remesh in
+  Blender — see [Remeshing in Blender](remeshing_in_blender.md).
+- **Hand misaligned in the viewer?** Revisit step 5 and adjust the root
+  link / fixed joint so the forward/up axes match `forward_axis` / `up_axis`.
+- **No contact points shown?** Check that the link names in `contact_points.json`
+  exactly match the URDF link names and that the referenced meshes exist.
+
+## References and Media
+
+- [Remeshing in Blender](remeshing_in_blender.md) — fixing collision meshes and
+  extracting contact meshes.
+- [`scripts/README.md`](../scripts/README.md) — index of all command-line tools.
+- [Adding a new hand to Isaac Lab](adding_hand_isaaclab.md) — physics evaluation
+  of the new hand.

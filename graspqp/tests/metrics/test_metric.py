@@ -1,3 +1,6 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+
 import pytest
 import torch
 
@@ -16,6 +19,7 @@ def test_cpu():
     metric(contact_pts, contact_normals, cog=cog)
 
 
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="requires a CUDA device")
 def test_gpu():
     metric = OverallFrictionConeSpanMetric.from_dim(num_wrenches=12, wrench_dim=6)
 

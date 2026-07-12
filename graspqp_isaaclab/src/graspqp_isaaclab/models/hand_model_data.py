@@ -1,3 +1,6 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+
 import omni.physics.tensors.impl.api as physx
 import torch
 from isaaclab.assets.articulation import ArticulationData
@@ -11,3 +14,7 @@ class HandModelData(ArticulationData):
         # print all tensors in the data class
         attrs = [f"{k}={v if isinstance(v, torch.Tensor) else v}" for k, v in self.__dict__.items() if not k.startswith("_")]
         return "ArticulationData(" + "\n ".join(attrs) + ")"
+    
+    @property
+    def actuated_joint_pos(self):
+        return self.joint_positions[..., self.actuated_joint_ids]

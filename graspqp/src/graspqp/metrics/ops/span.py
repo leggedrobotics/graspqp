@@ -1,3 +1,26 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+
+"""GraspQP span-metric implementations.
+
+A span metric measures grasp quality as the solution of a bounded optimization problem:
+given the contact points and normals it builds a friction-cone grasp (wrench) matrix
+``F`` mapping per-contact contact forces to a resultant 6D wrench, then asks how well a
+set of *test wrenches* (basis vectors) can be spanned by non-negative contact forces
+under magnitude bounds. The residual of that (least-squares / QP) problem is the energy.
+
+Class hierarchy:
+
+* :class:`GraspSpanMetric` -- base class: wrench-matrix assembly, warm-started solver
+  dispatch, SVD conditioning and result caching.
+* :class:`EucledianGraspSpanMetric` -- uses the ``±`` identity wrench directions as the
+  test-wrench basis.
+* :class:`EucledianFrictionConeSpanMetric` -- adds a discretized friction cone
+  (``n_cone_vecs`` edges, coefficient ``mu``) around each contact normal.
+* :class:`OverallFrictionConeSpanMetric` -- single test wrench equal to the negative sum
+  of contact wrenches (the "overall" resistible wrench); the default GraspQP metric.
+"""
+
 import math
 
 import torch
@@ -102,7 +125,31 @@ class GraspSpanMetric(torch.nn.Module):
         return_solution=True,
         torque_weight=5,
     ):
+        """Solve the span problem and return the grasp span energy.
 
+        Assembles the wrench matrix ``F`` from the friction-cone forces and torques,
+        builds the test-wrench basis, and solves the bounded least-squares / QP problem
+        (warm-started from the previous solution) for the residual.
+
+        Args:
+            contact_pts: Contact points, shape ``(batch, n_contact, 3)`` in meters.
+            contact_normals: Contact normals, shape ``(batch, n_contact, 3)``.
+            cog: Object center of gravity, shape ``(batch, 3)`` in meters.
+            contact_threshold: Distance threshold used to gate contacts.
+            reg: Tikhonov regularization weight passed to the solver.
+            env_ids: Optional indices selecting a subset of environments for
+                warm-starting when only part of the batch is solved.
+            return_solution: If ``True`` also return the aggregated per-contact
+                solution values.
+            torque_weight: Scaling of the torque rows relative to the force rows of
+                ``F``.
+
+        Returns:
+            tuple: ``(residual, basis, svd_scales)`` and, when ``return_solution`` is
+            ``True``, an additional ``values`` tensor of per-contact solution
+            magnitudes. ``svd_scales`` is the geometric mean of the singular values of
+            ``F`` (a conditioning term).
+        """
         if self._use_cache:
             self._cache["contact_pts"] = contact_pts
             self._cache["contact_normals"] = contact_normals
@@ -146,6 +193,7 @@ class GraspSpanMetric(torch.nn.Module):
                 init = init.squeeze(1)
             if init.shape[0] != F.shape[0]:
                 init = 1.5
+
         # call solver
         # check nan in input
 
@@ -205,6 +253,13 @@ class GraspSpanMetric(torch.nn.Module):
 
 
 class EucledianGraspSpanMetric(GraspSpanMetric):
+    """Span metric whose test-wrench basis is the ``±`` identity of wrench space.
+
+    The basis is the stack of ``+e_i`` and ``-e_i`` unit wrenches, so the metric asks
+    whether every axis-aligned wrench (both signs) can be resisted -- an approximation
+    of full 6D force closure.
+    """
+
     def __init__(self, solver_cls=LsqSolver):
         super().__init__(solver_cls=solver_cls)
         self._basis_vectors = None
@@ -231,6 +286,19 @@ class EucledianGraspSpanMetric(GraspSpanMetric):
 
 
 class EucledianFrictionConeSpanMetric(EucledianGraspSpanMetric):
+    """Euclidean span metric with a discretized Coulomb friction cone per contact.
+
+    Each contact normal is replaced by ``n_cone_vecs`` linearized friction-cone edge
+    vectors (half-angle ``atan(mu)``), so tangential forces within the friction limit
+    are representable. In 2D the cone reduces to its two boundary rays.
+
+    Args:
+        solver_cls: QP / least-squares solver class used to solve the span problem.
+        friction: Coulomb friction coefficient ``mu`` (defaults to ``0.2`` when
+            ``None``).
+        n_cone_vecs: Number of linear edges used to discretize each 3D friction cone.
+    """
+
     def __init__(self, solver_cls=LsqSolver, friction=0.2, n_cone_vecs=4):
         super().__init__(solver_cls=solver_cls)
 
@@ -261,6 +329,17 @@ class EucledianFrictionConeSpanMetric(EucledianGraspSpanMetric):
         return metric
 
     def get_friction_cone(self, normals: torch.Tensor):
+        """Expand contact normals into linearized friction-cone edge directions.
+
+        Args:
+            normals: Contact normals, shape ``(batch, n_contact, d)`` with ``d`` 2 or 3.
+
+        Returns:
+            torch.Tensor: Friction-cone edge vectors, shape
+            ``(batch, n_contact * friction_cone_size, d)``, where ``friction_cone_size``
+            is 2 in 2D and ``n_cone_vecs`` in 3D. Each cone's edges are normalized by
+            the number of edges so the group sums to unit weight.
+        """
         tangential_basis = []
         if normals.shape[-1] == 2:
             v_t = torch.stack([normals[..., 1], -normals[..., 0]], dim=-1)
@@ -296,6 +375,14 @@ class EucledianFrictionConeSpanMetric(EucledianGraspSpanMetric):
 
 
 class OverallFrictionConeSpanMetric(EucledianFrictionConeSpanMetric):
+    """Default GraspQP metric: a single test wrench equal to the total contact wrench.
+
+    Instead of probing every axis, the basis is the negative sum of the columns of
+    ``F`` -- the resultant "overall" wrench the contacts produce. The metric then asks
+    how efficiently the contacts can cancel that wrench, using a single non-negative
+    span problem (``n_basis_vectors == 1``).
+    """
+
     def __init__(self, solver_cls=LsqSolver, friction=0.2, n_cone_vecs=4):
         super().__init__(solver_cls=solver_cls, friction=friction, n_cone_vecs=n_cone_vecs)
         self._basis_vectors = None
@@ -321,7 +408,27 @@ class OverallFrictionConeSpanMetric(EucledianFrictionConeSpanMetric):
         return_solution=True,
         torque_weight=5,
     ):
+        """Solve the single-basis "overall wrench" span problem.
 
+        Same signature and return contract as :meth:`GraspSpanMetric.forward`, but the
+        test-wrench basis is the negative sum of the wrench columns (built inside this
+        method) and the force bounds are shifted by one.
+
+        Args:
+            contact_pts: Contact points, shape ``(batch, n_contact, 3)`` in meters.
+            contact_normals: Contact normals, shape ``(batch, n_contact, 3)``.
+            cog: Object center of gravity, shape ``(batch, 3)`` in meters.
+            contact_threshold: Distance threshold used to gate contacts.
+            reg: Tikhonov regularization weight passed to the solver.
+            env_ids: Optional environment subset indices for warm-starting.
+            return_solution: If ``True`` also return the aggregated per-contact
+                solution values.
+            torque_weight: Scaling of the torque rows relative to the force rows.
+
+        Returns:
+            tuple: ``(residual, basis, svd_scales)`` and, when ``return_solution`` is
+            ``True``, an additional per-contact ``values`` tensor.
+        """
         if self._use_cache:
             self._cache["contact_pts"] = contact_pts
             self._cache["contact_normals"] = contact_normals

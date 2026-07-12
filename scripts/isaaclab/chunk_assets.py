@@ -1,3 +1,6 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+
 from __future__ import annotations
 
 import argparse
@@ -12,7 +15,7 @@ parser = argparse.ArgumentParser(description="Chunk and process assets for grasp
 parser.add_argument("python_file", type=str, help="Path to the Python file to execute for each chunk")
 
 # Data path and processing arguments
-parser.add_argument("--data_path", type=str, default="/data/handles/eval", help="Root folder path containing asset directories")
+parser.add_argument("--data_path", type=str, default="/path/to/data/handles/eval", help="Root folder path containing asset directories")
 parser.add_argument("--n_grasps_per_obj", type=int, default=32, help="Number of grasps to evaluate per object")
 parser.add_argument("--max_envs", type=int, default=4096, help="Maximum number of simulation environments")
 parser.add_argument("--prediction_folder", default="grasp_predictions", help="Name of the folder containing grasp predictions")

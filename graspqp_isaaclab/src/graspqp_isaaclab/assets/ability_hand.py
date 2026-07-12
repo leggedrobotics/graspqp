@@ -1,3 +1,6 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+
 import math
 import os
 
@@ -24,7 +27,7 @@ ABILITY_HAND_MIMIC_JOINT_NAMES = ["index_q2", "middle_q2", "pinky_q2", "ring_q2"
 
 
 ABILITY_HAND_DEFAULT = ArticulationCfg.InitialStateCfg(
-    pos=(0.0, 0.0, 0.4),
+    pos=(0.0, 0.0, 0.0),
     # rot=(0.0, 1.0, 0.0, 0.0),
     joint_pos={
         "index_q1": 0.3,
@@ -113,8 +116,40 @@ ABILITY_HAND_GRIPPER_ACTUATOR_CFG = ImplicitActuatorCfg(
         "thumb_q1": THUMB_Q1_ARMATURE,
         "thumb_q2": THUMB_Q2_ARMATURE,
     },
+    effort_limit = {
+        "index_q1": FINGER_Q1_EFFORT_LIMIT,
+        "middle_q1": FINGER_Q1_EFFORT_LIMIT,
+        "pinky_q1": FINGER_Q1_EFFORT_LIMIT,
+        "ring_q1": FINGER_Q1_EFFORT_LIMIT,
+        "thumb_q1": THUMB_Q1_EFFORT_LIMIT,
+        "thumb_q2": THUMB_Q2_EFFORT_LIMIT,
+    }
 )
 
+# spawn=sim_utils.UsdFileCfg(
+#     usd_path=os.path.join(
+#         os.path.dirname(__file__),
+#         "shadow_hand",
+#         "shadow_hand.usd",
+#     ),
+#     activate_contact_sensors=True,
+#     rigid_props=sim_utils.RigidBodyPropertiesCfg(
+#         disable_gravity=True,
+#         retain_accelerations=False,
+#         max_linear_velocity=100.0,
+#         max_angular_velocity=50.0,
+#         max_depenetration_velocity=100.0,
+#     ),
+#     articulation_props=sim_utils.ArticulationRootPropertiesCfg(
+#         enabled_self_collisions=True,
+#         solver_position_iteration_count=8,
+#         solver_velocity_iteration_count=0,
+#         sleep_threshold=0.00,
+#         stabilization_threshold=0.0005,
+#     ),
+#     collision_props=sim_utils.CollisionPropertiesCfg(contact_offset=0.015, rest_offset=0.0),
+#     joint_drive_props=sim_utils.JointDrivePropertiesCfg(drive_type="force"),
+# ),
 ABILITY_HAND_CFG = HandModelCfg(
     spawn=sim_utils.UsdFileCfg(
         usd_path=os.path.join(
@@ -122,25 +157,24 @@ ABILITY_HAND_CFG = HandModelCfg(
             "AbilityHand",
             "AbilityHandMimicFlat.usd",
         ),
-        activate_contact_sensors=False,
+        activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=True,
-            retain_accelerations=False,
-            enable_gyroscopic_forces=False,
-            angular_damping=0.01,
-            max_linear_velocity=1000.0,
-            max_angular_velocity=64 / math.pi * 180.0,
-            max_depenetration_velocity=1000.0,
-            max_contact_impulse=1e32,
+#         retain_accelerations=False,
+            max_linear_velocity=100.0,
+            max_angular_velocity=50,
+            max_depenetration_velocity=100.0,
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
             enabled_self_collisions=True,
-            solver_position_iteration_count=16,
-            solver_velocity_iteration_count=4,
-            sleep_threshold=0.005,
+            solver_position_iteration_count=8,
+            solver_velocity_iteration_count=0,
+            sleep_threshold=0.00,
             stabilization_threshold=0.0005,
         ),
-        collision_props=sim_utils.CollisionPropertiesCfg(contact_offset=0.005, rest_offset=0.0, torsional_patch_radius=0.002),
+        collision_props=sim_utils.CollisionPropertiesCfg(
+            contact_offset=0.015, rest_offset=0.0, torsional_patch_radius=0.002
+        ),
     ),
     init_state=ABILITY_HAND_DEFAULT,
     actuators={
@@ -171,3 +205,46 @@ ABILITY_HAND_CFG = HandModelCfg(
     },
     hand_model_name="ability_hand",
 )
+
+ABILITY_HAND_FLOATING_CFG = ABILITY_HAND_CFG.copy()
+ABILITY_HAND_FLOATING_CFG.spawn.usd_path = os.path.join(
+    os.path.dirname(__file__),
+    "AbilityHand",
+    "standalone_abilityhand.usd",
+)
+
+
+ABILITY_HAND_FLOATING_CFG.actuators["wrist"] = ImplicitActuatorCfg(
+    joint_names_expr=["dummy.*"],
+    effort_limit={
+        "dummy_base_prismatic_x_joint": 100.0,
+        "dummy_base_prismatic_y_joint": 100.0,
+        "dummy_base_prismatic_z_joint": 100.0,
+        "dummy_base_revolute_x_joint": 50.0,
+        "dummy_base_revolute_y_joint": 50.0,
+        "dummy_base_revolute_z_joint": 50.0,
+    },
+    velocity_limit=10.0,
+    stiffness={
+        "dummy_base_prismatic_x_joint": 250.0,
+        "dummy_base_prismatic_y_joint": 250.0,
+        "dummy_base_prismatic_z_joint": 250.0,
+        "dummy_base_revolute_x_joint": 80.0,
+        "dummy_base_revolute_y_joint": 80.0,
+        "dummy_base_revolute_z_joint": 80.0,
+    },
+    damping={
+        "dummy_base_prismatic_x_joint": 15.0,
+        "dummy_base_prismatic_y_joint": 15.0,
+        "dummy_base_prismatic_z_joint": 15.0,
+        "dummy_base_revolute_x_joint": 5.0,
+        "dummy_base_revolute_y_joint": 5.0,
+        "dummy_base_revolute_z_joint": 5.0,
+    },
+    friction=0.15,
+    armature=0.003,
+)
+
+ABILITY_HAND_FLOATING_CFG.init_state.joint_pos["dummy_base_revolute_y_joint"] = 3.1415
+ABILITY_HAND_FLOATING_CFG.init_state.joint_pos["dummy_base_revolute_x_joint"] = -0.5
+ABILITY_HAND_FLOATING_CFG.init_state.joint_pos["dummy_base_prismatic_z_joint"] = 0.75

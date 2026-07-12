@@ -1,26 +1,65 @@
-"""
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+#
+# Portions derived from DexGraspNet (https://github.com/PKU-EPIC/DexGraspNet),
+# MIT License, Copyright (c) 2023 Jialiang Zhang, Ruicheng Wang.
+
+"""Grasp pose initialization strategies.
+
+Provides :func:`initialize_convex_hull`, which seeds a batch of grasps by
+sampling anchor points on an inflated convex hull of each object, orienting the
+hand so its approach axis points at the surface, and jittering the joint angles
+around the hand's default pose. The resulting poses (and, optionally, random
+contact-point indices) are written into the hand model to start optimization.
+
 Last modified date: 2023.02.23
 Author: Jialiang Zhang, Ruicheng Wang
 Description: initializations
 """
 
-import pytorch3d.ops
-import pytorch3d.structures
 import torch
+
+from .pytorch3d_compat import sample_farthest_points
 import torch.nn.functional
 import transforms3d
 import trimesh as tm
 
 
 def initialize_convex_hull(hand_model, object_model, args, env_mask=None, energy_checker=None, init_contacts=True):
-    """
-    Initialize grasp translation, rotation, joint angles, and contact point indices
+    """Initialize grasp translation, rotation, joint angles and contact indices.
 
-    Parameters
-    ----------
-    hand_model: hand_model.HandModel
-    object_model: object_model.ObjectModel
-    args: Namespace
+    For every object a scaled, inflated convex hull is built and points are
+    sampled on it with farthest-point sampling. Each sampled anchor becomes the
+    approach target: the hand is rotated so its ``up_axis`` aligns with the
+    inward surface normal (via a look-at construction) and then perturbed by
+    random tilt/pitch/roll and a random stand-off distance (all in radians /
+    meters). Joint angles are drawn from a truncated normal centered on the
+    hand's default state and clamped to the joint limits. The full pose is
+    written into ``hand_model`` through :meth:`HandModel.set_parameters`.
+
+    Args:
+        hand_model (HandModel): Hand to initialize; must expose ``device``,
+            ``default_state``, joint limits, ``up_axis``/``forward_axis`` and
+            ``n_dofs``. Mutated in place when ``init_contacts`` is True.
+        object_model (ObjectModel): Objects providing meshes and per-object
+            scales; also supplies ``batch_size_each``.
+        args (Namespace): Sampling ranges, including ``distance_lower/upper``
+            (meters), ``rotate_lower/upper``, ``pitch_lower/upper``,
+            ``tilt_lower/upper`` (radians), ``jitter_strength`` and
+            ``n_contact``.
+        env_mask (torch.Tensor | None): Optional boolean mask forwarded to
+            ``set_parameters`` to restrict which environments are re-initialized.
+        energy_checker: Unused placeholder kept for API compatibility.
+        init_contacts (bool): If True, also sample random contact-point indices
+            and push the full state into the hand model. If False, do not set
+            contacts and instead return the raw pose tensors.
+
+    Returns:
+        tuple | None: When ``init_contacts`` is False, returns
+        ``(translation, rotation6d, joint_angles)`` with shapes
+        ``(total_batch_size, 3)``, ``(total_batch_size, 6)`` and
+        ``(total_batch_size, n_dofs)``. When True, returns ``None`` after
+        writing the pose and contact indices into ``hand_model``.
     """
 
     device = hand_model.device
@@ -42,7 +81,8 @@ def initialize_convex_hull(hand_model, object_model, args, env_mask=None, energy
         faces = mesh_origin.faces
         vertices *= object_model.object_scale_tensor[i].max().item()
         mesh_origin = tm.Trimesh(vertices, faces)
-        mesh_origin.faces = mesh_origin.faces[mesh_origin.remove_degenerate_faces()]
+        # trimesh >=4 removed Trimesh.remove_degenerate_faces(); use the nondegenerate_faces() mask.
+        mesh_origin.update_faces(mesh_origin.nondegenerate_faces())
 
         # vertices += 0.05 * vertices / np.linalg.norm(vertices, axis=1, keepdims=True) # 5cm inflation
         mesh = tm.Trimesh(vertices=vertices, faces=faces)  # .convex_hull
@@ -59,11 +99,11 @@ def initialize_convex_hull(hand_model, object_model, args, env_mask=None, energy
                 points = points + mesh.face_normals[faces] * 0.01
                 # mesh_pytorch3d = pytorch3d.structures.Meshes(vertices.unsqueeze(0), faces.unsqueeze(0))
                 # sample points
-                dense_point_cloud = torch.from_numpy(points).to(device).unsqueeze(0)
+                dense_point_cloud = torch.from_numpy(points).float().to(device).unsqueeze(0)
 
-                p = pytorch3d.ops.sample_farthest_points(
-                    dense_point_cloud, K=batch_size_each, random_start_point=not init_contacts
-                )[0][0]
+                p = sample_farthest_points(dense_point_cloud, K=batch_size_each, random_start_point=not init_contacts)[
+                    0
+                ][0]
                 closest_points, _, _ = mesh_origin.nearest.on_surface(p.detach().cpu().numpy())
                 success = True
             except FloatingPointError as e:
@@ -111,7 +151,9 @@ def initialize_convex_hull(hand_model, object_model, args, env_mask=None, energy
             # 4. Construct the batched 3x3 orientation matrices
             # Stack the right, up, and forward vectors into 3x3 matrices
             orientation_matrices = torch.stack([forward, up, right], dim=-1)
-            basis = torch.stack([forward_vector, -torch.cross(forward_vector, base_up_vector, dim=-1), base_up_vector], dim=-1)
+            basis = torch.stack(
+                [forward_vector, -torch.cross(forward_vector, base_up_vector, dim=-1), base_up_vector], dim=-1
+            )
 
             return orientation_matrices @ basis
 

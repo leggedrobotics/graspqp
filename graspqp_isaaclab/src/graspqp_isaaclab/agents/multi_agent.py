@@ -1,3 +1,6 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+
 """
 Multi-agent wrapper for coordinating multiple grasping agents across different assets.
 
@@ -35,6 +38,7 @@ class MultiAgentWrapper(Agent):
         # Calculate environment distribution across agents
         self._envs_per_asset = torch.bincount(asset_mapping).tolist()
         self._envs_cumsum = torch.cumsum(torch.tensor([0] + self._envs_per_asset), dim=0)
+        self._env_slices = [slice(self._envs_cumsum[i], self._envs_cumsum[i + 1]) for i in range(len(self._agents))]
 
     def reset(self):
         """Reset all managed agents."""
@@ -49,8 +53,8 @@ class MultiAgentWrapper(Agent):
 
     def update_envs(self, observations, rewards):
         """Forward observations and rewards to all agents."""
-        for agent in self._agents:
-            agent.update_envs(observations, rewards)
+        for agent_idx, agent in enumerate(self._agents):
+            agent.update_envs(observations[self._env_slices[agent_idx]], rewards[self._env_slices[agent_idx]])
 
     def reset_envs(self, envs, succeeded):
         """Route environment resets to appropriate agents based on environment ranges."""

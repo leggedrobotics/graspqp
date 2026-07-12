@@ -1,3 +1,6 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+
 import os
 from typing import Tuple
 
@@ -162,8 +165,8 @@ class RunningStatistics:
 def calc_unique_grasps(
     joint_positions: torch.Tensor,
     hand_poses: torch.Tensor,
-    limits_joints: torch.Tensor,
     limits_pos: torch.Tensor,
+    limits_joints: torch.Tensor,
     limits_deg: torch.Tensor,
     valid_envs: torch.Tensor,
 ) -> Tuple[int, int]:
@@ -185,14 +188,19 @@ def calc_unique_grasps(
     euler_angles = roma.unitquat_to_euler("xyz", hand_poses[:, [4, 5, 6, 3]])
     full_state = torch.cat(
         [
-            (hand_poses[:, :3] / limits_pos).round() * limits_pos,
-            (euler_angles / limits_deg).round() * limits_deg,
-            (joint_positions / limits_joints).round() * limits_joints,
+            (hand_poses[:, :3] / limits_pos).floor(), #* limits_pos,
+            (euler_angles / limits_deg).floor(), # * limits_deg,
+            (joint_positions / limits_joints).floor() #* limits_joints,
         ],
         dim=-1,
-    )
+    ).long()
+    
+    # print("Unique Pos:", full_state[:, :3].unique(dim=0).shape[0])
+    # print("Unique Euler Angles:", full_state[:, 3:6].unique(dim=0).shape[0])
+    # print("Unique Joint Positions:", full_state[:, 6:].unique(dim=0).shape[0])
     n_unique_grasps = full_state.unique(dim=0).shape[0]
     n_unique_working_grasps = full_state[valid_envs].unique(dim=0).shape[0]
+    print(f"Unique grasps: {n_unique_grasps}, Unique working grasps: {n_unique_working_grasps}")
     return n_unique_grasps, n_unique_working_grasps
 
 

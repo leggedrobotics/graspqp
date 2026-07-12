@@ -1,27 +1,126 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
+import weakref
 
+import carb
 import isaaclab.sim as sim_utils
+from graspqp_isaaclab.utils.appcompat import resolve_prim_pose, resolve_prim_scale
+import numpy as np
 import torch
+import trimesh
+import warp as wp
 from isaaclab.assets.rigid_object import RigidObject
+from isaaclab.utils.math import matrix_from_quat
 from pxr import UsdPhysics
 
 from .object_model_data import RigidObjectModelData
+from graspqp_isaaclab.utils import warp as wp_mesh
+from graspqp_isaaclab.utils.warp import convert_to_warp_mesh
 
 if TYPE_CHECKING:
     from .object_model_cfg import RigidObjectModelCfg
 
-import weakref
-from typing import TYPE_CHECKING, ClassVar
 
-import carb
-import numpy as np
-import warp as wp
-from graspqp_isaaclab.utils.warp import convert_to_warp_mesh
+# Define primitive mesh types for collision detection
+PRIMITIVE_MESH_TYPES = ("Sphere", "Cube", "Cylinder", "Cone", "Capsule", "Plane")
 
-# from graspqp_isaaclab.utils.warp import mesh as wp_mesh
+def convert_faces_to_triangles(faces: np.ndarray, point_counts: np.ndarray) -> np.ndarray:
+    """Converts quad mesh face indices into triangle face indices.
+
+    This function expects an array of faces (indices) and the number of points per face. It then converts potential
+    quads into triangles and returns the new triangle face indices as a numpy array of shape (n_faces_new, 3).
+
+    Args:
+        faces: The faces of the quad mesh as a one-dimensional array. Shape is (N,).
+        point_counts: The number of points per face. Shape is (N,).
+
+    Returns:
+        The new face ids with triangles. Shape is (n_faces_new, 3).
+    """
+    # check if the mesh is already triangulated
+    if (point_counts == 3).all():
+        return faces.reshape(-1, 3)  # already triangulated
+    all_faces = []
+
+    vertex_counter = 0
+    # Iterates over all faces of the mesh to triangulate them.
+    # could be very slow for large meshes
+    for num_points in point_counts:
+        # Triangulate n-gons (n>4) using fan triangulation
+        for i in range(num_points - 2):
+            triangle = np.array([faces[vertex_counter], faces[vertex_counter + 1 + i], faces[vertex_counter + 2 + i]])
+            all_faces.append(triangle)
+
+        vertex_counter += num_points
+    return np.asarray(all_faces)
+
+
+def create_trimesh_from_geom_mesh(mesh_prim):
+    """Reads the vertices and faces of a mesh prim.
+
+    The function reads the vertices and faces of a mesh prim and returns it. If the underlying mesh is a quad mesh,
+    it converts it to a triangle mesh.
+
+    Args:
+        mesh_prim: The mesh prim to read the vertices and faces from.
+
+    Returns:
+        A trimesh.Trimesh object containing the mesh geometry.
+    """
+    from pxr import UsdGeom
+    
+    if mesh_prim.GetTypeName() != "Mesh":
+        raise ValueError(f"Prim at path '{mesh_prim.GetPath()}' is not a mesh.")
+    # cast into UsdGeomMesh
+    mesh = UsdGeom.Mesh(mesh_prim)
+
+    # read the vertices and faces
+    points = np.asarray(mesh.GetPointsAttr().Get()).copy()
+
+    # Load faces and convert to triangle if needed. (Default is quads)
+    num_vertex_per_face = np.asarray(mesh.GetFaceVertexCountsAttr().Get())
+    indices = np.asarray(mesh.GetFaceVertexIndicesAttr().Get())
+    return points, convert_faces_to_triangles(indices, num_vertex_per_face)
+
+
+def create_mesh_from_geom_shape(shape_prim):
+    """Create a mesh from a USD geometric shape prim."""
+    from pxr import UsdGeom
+    
+    prim_type = shape_prim.GetTypeName()
+    
+    if prim_type == "Sphere":
+        sphere = UsdGeom.Sphere(shape_prim)
+        radius = float(sphere.GetRadiusAttr().Get() or 1.0)
+        mesh = trimesh.creation.icosphere(radius=radius, subdivisions=4)
+    elif prim_type == "Cube":
+        cube = UsdGeom.Cube(shape_prim)
+        size = float(cube.GetSizeAttr().Get() or 2.0)
+        mesh = trimesh.creation.box(extents=[size, size, size])
+    elif prim_type == "Cylinder":
+        cylinder = UsdGeom.Cylinder(shape_prim)
+        radius = float(cylinder.GetRadiusAttr().Get() or 1.0)
+        height = float(cylinder.GetHeightAttr().Get() or 2.0)
+        mesh = trimesh.creation.cylinder(radius=radius, height=height, sections=32)
+    elif prim_type == "Capsule":
+        capsule = UsdGeom.Capsule(shape_prim)
+        radius = float(capsule.GetRadiusAttr().Get() or 1.0)
+        height = float(capsule.GetHeightAttr().Get() or 2.0)
+        mesh = trimesh.creation.capsule(radius=radius, height=height)
+    elif prim_type == "Cone":
+        cone = UsdGeom.Cone(shape_prim)
+        radius = float(cone.GetRadiusAttr().Get() or 1.0)
+        height = float(cone.GetHeightAttr().Get() or 2.0)
+        mesh = trimesh.creation.cylinder(radius=radius, height=height, sections=32)
+    else:
+        raise ValueError(f"Unsupported shape type: {prim_type}")
+    
+    return mesh
 
 
 def _get_prim_view(prim_path_expr: str, physics_sim_view, max_depth: int = 2) -> str:
@@ -105,18 +204,41 @@ class RigidObjectModel(RigidObject):
         self._n_surface_pts = cfg.n_surface_pts
         self._mesh_target = cfg.mesh_target_cfg
 
+    def _create_rigid_object_data(self):
+        return RigidObjectModelData(self._root_physx_view, self.device)
+
+    # def _create_rigid_object_data(self) -> RigidObjectData:
+    #     """Create rigid object data instance.
+
+    #     Returns:
+    #         Rigid object data instance.
+    #     """
+    #     return RigidObjectData(self._root_physx_view, self.device)
+
     def _initialize_impl(self):
         super()._initialize_impl()
         # load the meshes by parsing the stage
-        # self._initialize_warp_meshes()
+        self._initialize_warp_meshes()
 
-    def calc_contact_normals(self, contact_pts_w: torch.Tensor, env_ids: Sequence[int] | None = None):
+    def calc_contact_normals(
+        self,
+        contact_pts_w: torch.Tensor,
+        env_ids: Sequence[int] | None = None,
+        pose: torch.Tensor | None = None,
+        collision=True,
+    ):
         body_pose = self._data.root_state_w[:, :7]
+
         if env_ids is None:
             env_ids = torch.arange(len(body_pose), device=body_pose.device)
 
-        mesh_pos = body_pose[env_ids, :3].unsqueeze(1)
-        mesh_rot = body_pose[env_ids, 3:7].unsqueeze(1)
+        if pose is None:
+            mesh_pos = body_pose[env_ids, :3].unsqueeze(1)
+            mesh_rot = body_pose[env_ids, 3:7].unsqueeze(1)
+        else:
+            mesh_pos = pose[:, :3].unsqueeze(1)
+            mesh_rot = pose[:, 3:7].unsqueeze(1)
+
         sdf, triangle_normals = wp_mesh.calc_obj_distances(
             wp.array2d(self._object_mesh_ids, dtype=wp.uint64, device=self.device),
             mesh_pos,
@@ -128,11 +250,6 @@ class RigidObjectModel(RigidObject):
         sdf = sdf.squeeze(1)
         triangle_normals = triangle_normals.squeeze(1)
         return triangle_normals, sdf
-
-        self._debug_data["contact_pts_norm_w"][env_ids] = contact_pts_w
-        self._debug_data["contact_norms_w"][env_ids] = -triangle_normals * sdf.unsqueeze(-1).abs()
-
-        return -(offset + distance_scale * sdf.unsqueeze(-1).abs()) * triangle_normals, sdf
 
     def _initialize_warp_meshes(self):
 
@@ -151,20 +268,42 @@ class RigidObjectModel(RigidObject):
         for path_idx, path in enumerate(paths):
 
             # check if the prim is a primitive object - handle these as special types
-            mesh_prim = sim_utils.get_first_matching_child_prim(path, lambda prim: prim.GetTypeName() in PRIMITIVE_MESH_TYPES)
+            mesh_prim = sim_utils.get_first_matching_child_prim(
+                path, lambda prim: prim.GetTypeName() in PRIMITIVE_MESH_TYPES
+            )
 
             if mesh_prim is None:
                 # obtain the mesh prim
                 mesh_prim = sim_utils.get_first_matching_child_prim(path, lambda prim: prim.GetTypeName() == "Mesh")
-
+                main_prim = sim_utils.find_first_matching_prim(path)
                 if mesh_prim is None or not mesh_prim.IsValid():
                     raise RuntimeError(f"Invalid mesh prim path: {paths}")
 
                 points, faces = create_trimesh_from_geom_mesh(mesh_prim)
-                points *= np.array(sim_utils.resolve_world_scale(mesh_prim))
-                if str(RigidObjectModel.mesh_views[prim_path].prim_paths[path_idx]) != str(mesh_prim.GetPath()):
+                mesh = trimesh.Trimesh(vertices=points, faces=faces, process=False)
+                scale = resolve_prim_scale(mesh_prim)
+                mesh.apply_scale(scale)
+
+                relative_pos, relative_quat = resolve_prim_pose(mesh_prim, main_prim)
+                relative_pos = torch.tensor(relative_pos, dtype=torch.float32)
+                relative_quat = torch.tensor(relative_quat, dtype=torch.float32)
+                rotation = matrix_from_quat(relative_quat)
+                transform = np.eye(4)
+                transform[:3, :3] = rotation.numpy()
+                transform[:3, 3] = relative_pos.numpy()
+                mesh.apply_transform(transform)
+                points, faces = mesh.vertices, mesh.faces
+                if (
+                    str(RigidObjectModel.mesh_views[prim_path].prim_paths[path_idx]) != str(mesh_prim.GetPath())
+                    and False
+                ):
+                    raise RuntimeError(
+                        f"Mesh prim path mismatch: {RigidObjectModel.mesh_views[prim_path].prim_paths[path_idx]} vs {mesh_prim.GetPath()}"
+                    )
                     # find relative path
-                    parent_prim = sim_utils.find_matching_prims(RigidObjectModel.mesh_views[prim_path].prim_paths[path_idx])[0]
+                    parent_prim = sim_utils.find_matching_prims(
+                        RigidObjectModel.mesh_views[prim_path].prim_paths[path_idx]
+                    )[0]
                     # pos, orientation = sim_utils.get_relative_chain_pose_from_usd(mesh_prim, parent_prim)
                     # RigidObjectModel.local_tfs[prim_path] = torch.cat([pos, orientation], dim=-1)
                     # points = (
@@ -177,16 +316,37 @@ class RigidObjectModel(RigidObject):
                     #     .numpy()
                     # )
                     wp_mesh = convert_to_warp_mesh(points, faces, device=self.device)
-                    carb.log_info(f"Read mesh prim: {mesh_prim.GetPath()} with {len(points)} vertices and {len(faces)} faces.")
+                    carb.log_info(
+                        f"Read mesh prim: {mesh_prim.GetPath()} with {len(points)} vertices and {len(faces)} faces."
+                    )
                 else:
-                    wp_mesh = convert_to_warp_mesh(points, faces, device=self.device)
+                    wp_mesh = convert_to_warp_mesh(mesh.vertices, mesh.faces, device=self.device)
                     carb.log_info(f"Created {mesh_prim.GetTypeName()} mesh prim: {mesh_prim.GetPath()}.")
             else:
                 # create mesh from primitive shape
                 mesh = create_mesh_from_geom_shape(mesh_prim)
-                mesh.vertices *= np.array(sim_utils.resolve_world_scale(mesh_prim))
+                points, faces = mesh.vertices, mesh.faces
+                main_prim = sim_utils.find_first_matching_prim(path)
+                if mesh_prim is None or not mesh_prim.IsValid():
+                    raise RuntimeError(f"Invalid mesh prim path: {paths}")
+
+                mesh = trimesh.Trimesh(vertices=points, faces=faces, process=False)
+                scale = resolve_prim_scale(mesh_prim)
+                mesh.apply_scale(scale)
+
+                relative_pos, relative_quat = resolve_prim_pose(mesh_prim, main_prim)
+                relative_pos = torch.tensor(relative_pos, dtype=torch.float32)
+                relative_quat = torch.tensor(relative_quat, dtype=torch.float32)
+                rotation = matrix_from_quat(relative_quat)
+                transform = np.eye(4)
+                transform[:3, :3] = rotation.numpy()
+                transform[:3, 3] = relative_pos.numpy()
+                mesh.apply_transform(transform)
+                points, faces = mesh.vertices, mesh.faces
+
                 wp_mesh = convert_to_warp_mesh(mesh.vertices, mesh.faces, device=self.device)
                 carb.log_info(f"Created {mesh_prim.GetTypeName()} mesh prim: {mesh_prim.GetPath()}.")
+
             registered_idx = _registered_points_idx(points, loaded_vertices)
             if registered_idx != -1:
                 # Found a duplicate mesh, only reference the mesh.
@@ -205,6 +365,7 @@ class RigidObjectModel(RigidObject):
         self._num_meshes_per_env[prim_path] = n_meshes_per_env
 
         surface_pts = []
+        surface_normals = []
         for i in range(self.num_instances):
             RigidObjectModel.meshes[prim_path].append(wp_meshes[mesh_idx : mesh_idx + n_meshes_per_env])
             mesh_idx += n_meshes_per_env
@@ -214,14 +375,17 @@ class RigidObjectModel(RigidObject):
                 warp_mesh = RigidObjectModel.meshes[prim_path][i][0]
                 pts = wp.to_torch(warp_mesh.points).to(self.device)
                 vertices = wp.to_torch(warp_mesh.indices).to(self.device)
-                from pytorch3d.ops import sample_points_from_meshes
-                from pytorch3d.structures import Meshes
+                from graspqp.core.pytorch3d_compat import sample_points_from_meshes, Meshes
 
                 mesh = Meshes(verts=[pts], faces=[vertices.view(-1, 3).float()])
-                sampled_pts = sample_points_from_meshes(mesh, self.cfg.n_surface_pts)
+                sampled_pts, sampled_normals = sample_points_from_meshes(
+                    mesh, self.cfg.n_surface_pts, return_normals=True
+                )
                 surface_pts.append(sampled_pts)
+                surface_normals.append(sampled_normals)
 
         self._data.surface_pts_b = torch.cat(surface_pts)
+        self._data.surface_normals_b = torch.cat(surface_normals)
         self._mesh_view = RigidObjectModel.mesh_views[prim_path]
 
         self._meshes = RigidObjectModel.meshes[prim_path]

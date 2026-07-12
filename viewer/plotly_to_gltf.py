@@ -1,3 +1,6 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+
 # plotly_to_gltf.py
 # Convert Plotly 3D traces (Scatter3d, Mesh3d) + optional custom meshes to a glTF scene.
 # Usage:

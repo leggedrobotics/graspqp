@@ -3,7 +3,7 @@ HAND_TYPES=("ability_hand" "allegro" "robotiq2" "robotiq3" "shadow_hand")
 MAX_GRASPS=9
 # GRASP_TYPES=("default" "pinch" "precision")
 GRASP_TYPES=("pinch" "precision")
-DATASET_PATH="/media/zrene/data/GraspGen/dexgrasp_remeshed/test"
+DATASET_PATH="/path/to/data/dexgrasp_remeshed/test"
 for HAND in "${HAND_TYPES[@]}"; do
   echo "Processing hand type: $HAND"
   for GRASP_TYPE in "${GRASP_TYPES[@]}"; do

@@ -221,3 +221,8 @@ docker/cuda-repo.deb
 docker/cuda-ubuntu2204.pin
 docker/cluster/exports/
 docker/cluster/exports
+
+# Regenerable cached contact-point selections (rebuilt on first run)
+**/contact_points_cached_state_*.json
+# USD/asset thumbnails
+**/.thumbs/

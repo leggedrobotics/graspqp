@@ -1,3 +1,6 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+
 """Parser utilities for command line argument handling and asset processing.
 
 This module provides utilities for configuring argument parsers with default
@@ -37,7 +40,7 @@ def add_default_args(parser):
         type=str,
         default="Object",
         help="Type of manipulation target: 'Object' for general objects.",
-        choices=["Object"],
+        choices=["Object", "Handle"],
     )
     parser.add_argument(
         "--task",
@@ -84,7 +87,7 @@ def add_default_args(parser):
     parser.add_argument(
         "--data_path",
         type=str,
-        default="/data/dexgrasp_remeshed/test",
+        default="/path/to/data/dexgrasp_remeshed/test",
         help="Root directory path containing asset folders and grasp data.",
     )
     parser.add_argument(
@@ -128,7 +131,9 @@ def add_default_args(parser):
     parser.add_argument(
         "--grasp_type", default="default", help="Grasp category or type identifier for filtering specific grasp sets."
     )
-    parser.add_argument("--file_pattern", default=None, help="Regex pattern for matching specific prediction files by name.")
+    parser.add_argument(
+        "--file_pattern", default=None, help="Regex pattern for matching specific prediction files by name."
+    )
 
     return parser
 
@@ -260,6 +265,7 @@ def parse_args(parser):
 
     if args_cli.usd_files is None:
         args_cli.usd_files = []
+        assets_to_remove = []
         # Load usd paths
         for asset in args_cli.assets:
             asset_dir = os.path.join(args_cli.data_path, asset)
@@ -272,6 +278,14 @@ def parse_args(parser):
             else:
                 usd_file = None
 
+            if usd_file and args_cli.object_type == "Handle":
+                handle_3dof_file = usd_file.replace(".usd", "_3dof_.usd")
+                if os.path.exists(handle_3dof_file):
+                    print(f"Using 3DOF handle file for asset '{asset}': {handle_3dof_file}")
+                    usd_file = handle_3dof_file
+                else:
+                    raise ValueError(f"3DOF handle file not found for asset '{asset}': {handle_3dof_file}")
+
             if usd_file is None:
                 # find matching usd file.
                 # Dexgrasp
@@ -280,8 +294,15 @@ def parse_args(parser):
                 # direct access
                 usd_file = os.path.join(asset_dir, f"{asset}.usd")
                 if not os.path.exists(usd_file):
-                    raise FileNotFoundError(f"No USD file found in '{asset_dir}' at 'coacd/{asset}.usd' nor '{asset}.usd'")
+                    print(f"\033[91mNo USD file found in '{asset_dir}' at 'coacd/{asset}.usd' nor '{asset}.usd'\033[0m")
+                    assets_to_remove.append(asset)
+                    continue
+                    raise FileNotFoundError(
+                        f"No USD file found in '{asset_dir}' at 'coacd/{asset}.usd' nor '{asset}.usd'"
+                    )
             args_cli.usd_files.append(usd_file)
+        for asset in assets_to_remove:
+            args_cli.assets.remove(asset)
     else:
         if isinstance(args_cli.usd_files, str):
             args_cli.usd_files = [args_cli.usd_files]

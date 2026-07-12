@@ -1,3 +1,6 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+
 import glob
 import math
 import os
@@ -19,8 +22,8 @@ for hand_type in HAND_TYPES:
             # energy_method = "span_overall_cone_sqp_default_longer_gendex" #"span_overall_cone_qp"
 
             # Path to your folder containing OBJ files
-            folder_path = "/home/zrene/git/DexGraspNet/graspqp/_vis/interaction_meshes"
-            screenshot_path = f"/home/zrene/git/DexGraspNet/graspqp/_vis/interaction_meshes/{hand_type}/{n_contacts}/{energy_method}/{grasp_type}"
+            folder_path = "/path/to/graspqp/_vis/interaction_meshes"
+            screenshot_path = f"/path/to/graspqp/_vis/interaction_meshes/{hand_type}/{n_contacts}/{energy_method}/{grasp_type}"
             os.makedirs(screenshot_path, exist_ok=True)
             max_assets = 1e6
 

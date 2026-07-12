@@ -1,3 +1,6 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+
 import pytest
 import torch
 
@@ -23,6 +26,7 @@ def test_cpu():
         metric(contact_pts, contact_normals, cog=cog, torque_weight=1.0)
 
 
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="requires a CUDA device")
 def test_gpu():
     for metric in [
         DexgraspSpanMetric(),

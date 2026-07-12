@@ -1,3 +1,14 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+
+"""SciPy (CPU) bounded least-squares backend for the span metrics.
+
+Implements :class:`ScipyLsqSolver`, which solves each span problem with
+:func:`scipy.optimize.lsq_linear`. It is a dependency-light, non-differentiable
+reference backend (selected by the ``*_SCIPY`` metric variants) useful for validation
+and for environments without the ``qpth``/ProxQP GPU solvers.
+"""
+
 import numpy as np
 import torch
 from scipy.optimize import lsq_linear
@@ -110,7 +121,7 @@ class ScipyLsqSolver:
 
         for idx, (A_single, b_single) in enumerate(zip(A_np, b_np)):
             # solve with scipy
-            res = lsq_linear(A_single, b_single, bounds=(bounds[0][idx], bounds[1][idx]))
+            res = lsq_linear(A_single + 1e-3, b_single, bounds=(bounds[0][idx], bounds[1][idx]))
             solutions.append(res.x)
             values.append(res.cost)
 

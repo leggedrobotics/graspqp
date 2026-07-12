@@ -1,34 +1,56 @@
 # Adding a new hand to Isaac Lab
 
-This guide shows how to add a new gripper/hand (example: Schunk 2F) to the GraspQP Isaac Lab integration.
+This guide shows how to bring a hand/gripper into the GraspQP **Isaac Lab**
+integration so its grasps can be evaluated in physics. The running example is the
+Schunk 2F parallel gripper.
+
+## Overview
+
+Adding a hand to Isaac Lab is four steps: convert the URDF to USD, drop the USD
+into the assets folder, describe the articulation with a `HandModelCfg`, and wire
+it into the visualizer and a task config.
+
+## Prerequisites
+
+- The hand already works in the core `graspqp` package
+  (see [Adding a new hand](adding_hand.md)) — same URDF, joint names, and axes.
+- A working **Isaac Lab / Isaac Sim** installation (the `graspqp_isaaclab`
+  package and its dependencies).
+- The hand's URDF and meshes.
+
+---
 
 ## Step 1 — Convert URDF to USD
 
-Use Isaac Sim’s URDF importer to convert your hand to USD. For Schunk 2F, convert the URDF to a single USD per articulation.
+Use Isaac Sim's URDF importer to convert your hand into a single USD per
+articulation.
 
-- In Isaac Sim, use the URDF importer (File → Import → URDF)
-- Verify collision meshes and joint names match your expectations
-- Save the resulting USD file(s)
+- In Isaac Sim, open the URDF importer (`File → Import → URDF`).
+- Verify that collision meshes and joint names match your expectations.
+- Save the resulting USD file(s).
 
 ![URDF to USD import example](images/add_hand.gif)
 
 ## Step 2 — Place assets in the repository
 
-Copy the converted USD and related files to:
+Copy the converted USD (and any referenced files) into a new folder under the
+Isaac Lab assets directory:
 
-```
+```bash
 graspqp_isaaclab/src/graspqp_isaaclab/assets/Schunk2f/
 ```
 
-The folder name should match what you’ll reference in code (case-sensitive on Linux).
+> **Note.** The folder name is case-sensitive on Linux and must match the
+> `usd_path` you reference in the config below.
 
-## Step 3 — Create a HandModelCfg for the new hand
+## Step 3 — Create a `HandModelCfg`
 
-Create `graspqp_isaaclab/src/graspqp_isaaclab/assets/schunk2f.py` by e.g. copying `robotiq2f.py` and adapting:
+Create `graspqp_isaaclab/src/graspqp_isaaclab/assets/schunk2f.py`, e.g. by copying
+an existing config such as `robotiq2f.py` and adapting it:
 
-- Replace occurrences of `ROBOTIQ_2F` with `SCHUNK_2F`
-- Update joint names (e.g., `finger_joint` → `egu_50_prismatic_1`)
-- Point `usd_path` to your new USD (e.g., `assets/Schunk2f/schunk.usd`)
+- Rename the config symbol (e.g. `ROBOTIQ_2F_CFG` → `SCHUNK_2F_CFG`).
+- Update the joint names to match your URDF (e.g. `egu_50_prismatic_1`).
+- Point `usd_path` at your new USD (e.g. `Schunk2f/schunk.usd`).
 
 Example skeleton:
 
@@ -86,21 +108,25 @@ SCHUNK_2F_CFG = HandModelCfg(
 )
 ```
 
+> **Tip.** Use `mimic_joints` to couple dependent joints (e.g. the second finger
+> of a parallel gripper), matching the coupling you defined in the core hand
+> model.
+
 ## Step 4 — Register and visualize the hand
 
-Expose your config and add it to the visualizer’s list.
-
-- Register the hand `scripts/isaaclab/show_hands.py`:
+Expose your config in the visualizer by adding it to the `AVAILABLE_HANDS` dict at
+the top of `scripts/isaaclab/show_hands.py`:
 
 ```python
 from graspqp_isaaclab.assets.schunk2f import SCHUNK_2F_CFG
 
 AVAILABLE_HANDS = {
+    # ...existing entries...
     "schunk": SCHUNK_2F_CFG,
 }
 ```
 
-- Visualize:
+Then visualize all registered hands (add `--headless` to run without a GUI):
 
 ```bash
 python scripts/isaaclab/show_hands.py
@@ -110,11 +136,23 @@ python scripts/isaaclab/show_hands.py
 
 ## Step 5 — Clone a task config
 
-Duplicate the Robotiq 2F task config as a starting point:
+Duplicate an existing task config as a starting point (Robotiq 2F is the closest
+match for a parallel gripper):
 
-```
+```bash
 cp -r graspqp_isaaclab/src/graspqp_isaaclab/tasks/manipulation/grasp/config/robotiq2f \
       graspqp_isaaclab/src/graspqp_isaaclab/tasks/manipulation/grasp/config/schunk2f
 ```
 
-Update the new config files to point to your `SCHUNK_2F_CFG` and adjust task parameters.
+Update the copied config files to reference `SCHUNK_2F_CFG` and adjust the task
+parameters as needed. In particular, update the `gym.register(...)` `id` in the
+config's `__init__.py` so the `%HANDTYPE%` slot matches the `--hand_type` you will
+pass on the command line (e.g. `Isaac-Object-Grasp-Mining-schunk2-v0`).
+
+Once registered, evaluate grasps for the new hand with the Isaac Lab scripts
+(see [`scripts/README.md`](../scripts/README.md)):
+
+```bash
+python scripts/isaaclab/eval_object_grasp.py \
+    --hand_type schunk2 --data_path /path/to/data --headless
+```

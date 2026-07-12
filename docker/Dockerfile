@@ -1,60 +1,40 @@
-ARG ISAACLAB_BASE_IMAGE_ARG=isaac-lab-base
+# syntax=docker/dockerfile:1
+#
+# GraspQP -- lightweight image (DEFAULT).
+#
+# Uses ONLY the WARP SDF backend + pytorch_kinematics. Both install as prebuilt wheels /
+# pure Python, so this image needs NO CUDA toolkit (nvcc) and does NO source compilation --
+# a CUDA *runtime* base is sufficient. WARP is the default backend (SDF_BACKEND=WARP).
+#
+# Build (context = repo root):
+#   docker build -f docker/Dockerfile -t graspqp:warp .
+# Run:
+#   docker run --rm --gpus all -it graspqp:warp
+#
+# For the non-default TorchSDF / Kaolin backends (which DO require nvcc), use
+# docker/Dockerfile.torchsdf instead.
 
-# we use the basic isaaclab image as the base
-FROM ${ISAACLAB_BASE_IMAGE_ARG} AS base
+ARG PYTORCH_IMAGE=pytorch/pytorch:2.7.0-cuda12.8-cudnn9-runtime
+FROM ${PYTORCH_IMAGE}
 
-ARG DOCKER_ISAACLAB_EXTENSION_TEMPLATE_PATH_ARG
-ENV DOCKER_ISAACLAB_EXTENSION_TEMPLATE_PATH=${DOCKER_ISAACLAB_EXTENSION_TEMPLATE_PATH_ARG}
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    SDF_BACKEND=WARP
 
-USER root
+# git: to pip-install pytorch_kinematics from git+https. libgl/glib: trimesh + plotly rendering.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git libgl1 libglib2.0-0 && \
+    rm -rf /var/lib/apt/lists/*
 
-COPY docker/cuda-ubuntu2204.pin /etc/apt/preferences.d/cuda-repository-pin-600
-COPY docker/cuda-repo.deb /tmp/cuda-repo.deb
+WORKDIR /workspace/graspqp
+COPY graspqp/ ./graspqp/
+COPY scripts/ ./scripts/
 
-RUN dpkg -i /tmp/cuda-repo.deb && \
-    cp /var/cuda-repo-ubuntu2204-12-8-local/cuda-*-keyring.gpg /usr/share/keyrings/ && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends cuda-toolkit-12-8 && \
-    rm -f /tmp/cuda-repo.deb && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+# Lightweight install: base deps (numpy/trimesh/...) + WARP + pytorch_kinematics + viz/log/opt.
+# No TorchSDF / pytorch3d / Kaolin => no nvcc, no compilation.
+RUN pip install --no-cache-dir --no-build-isolation -e "./graspqp[lite]"
 
-ENV CUDA_HOME=/usr/local/cuda-12.8
-ENV PATH=${CUDA_HOME}/bin:${PATH}
+# Sanity check: WARP + graspqp import cleanly.
+RUN python -c "import warp, graspqp; print('GraspQP lightweight image (WARP backend) ready')"
 
-# Install Kaolin
-RUN --mount=type=cache,target=/root/.cache/pip \
-    bash -i -c "source ${HOME}/.bashrc && \
-    pip install --find-links https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.7.0_cu128.html  kaolin==0.18.0"
-
-# Install PyTorch3D
-RUN --mount=type=cache,target=/root/.cache/pip \
-    bash -i -c "source ${HOME}/.bashrc && \
-    TORCH_CUDA_ARCH_LIST='8.0;8.6;8.9;9.0' FORCE_CUDA=1 python -m pip install --no-build-isolation  git+https://github.com/facebookresearch/pytorch3d.git@stable"
-
-
-COPY ../ ${DOCKER_ISAACLAB_EXTENSION_TEMPLATE_PATH}
-
-# Install GraspQP Dependencies
-RUN --mount=type=cache,target=/root/.cache/pip bash -i -c "source ${HOME}/.bashrc && \
-    cd ${DOCKER_ISAACLAB_EXTENSION_TEMPLATE_PATH}/thirdparty/pytorch_kinematics && \
-    pip install -e . && \
-    cd  ${DOCKER_ISAACLAB_EXTENSION_TEMPLATE_PATH}/thirdparty/TorchSDF && pip install -e . --no-build-isolation"
-
-# Install GraspQP and GraspQP Isaac Lab
-RUN --mount=type=cache,target=/root/.cache/pip bash -i -c "source ${HOME}/.bashrc && \
-    cd ${DOCKER_ISAACLAB_EXTENSION_TEMPLATE_PATH}/graspqp_isaaclab/src/ && \
-    pip install -e . && \
-    cd ${DOCKER_ISAACLAB_EXTENSION_TEMPLATE_PATH}/graspqp/ && \
-    pip install -e ."
-
-
-# For singularity use
-RUN mkdir -p /data
-
-WORKDIR /workspace
-
-RUN --mount=type=cache,target=/root/.cache/pip bash -i -c "source ${HOME}/.bashrc && \
-    pip install git+https://github.com/renezurbruegg/TorchSDF --no-build-isolation"
-
-# # make working directory as the Isaac Lab directory
-# # this is the default directory when the container is run
+CMD ["bash"]

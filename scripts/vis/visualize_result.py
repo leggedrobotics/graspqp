@@ -1,3 +1,6 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+
 """ """
 
 import argparse
@@ -1142,7 +1145,7 @@ if __name__ == "__main__":
     arg_parser.add_argument(
         "--dir",
         type=str,
-        default="/data/DexGraspNet/tiny/core-camera-5265ff657b9db80cafae29a76344a143/grasp_predictions",
+        default="/path/to/data/tiny/core-camera-5265ff657b9db80cafae29a76344a143/grasp_predictions",
         help="directory to save the images",
     )
 
@@ -1160,7 +1163,7 @@ if __name__ == "__main__":
     arg_parser.add_argument(
         "--vis_dir",
         type=str,
-        default="/home/zrene/git/graspqp/_vis",
+        default="/path/to/graspqp/_vis",
         help="directory to save visualization",
     )
     arg_parser.add_argument("--headless", action="store_true", help="run in headless mode")

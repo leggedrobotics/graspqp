@@ -5,14 +5,34 @@ requires = ["setuptools>=61.0", "wheel>=0.37.1"]
 [project]
 name = "graspqp"
 version = "0.0.1"
+description = "GraspQP: differentiable force-closure grasp synthesis for dexterous hands"
+# NOTE: the project README lives at the repository root (../README.md), which is outside this
+# package directory. Modern setuptools refuses to read a readme file outside the project dir
+# (and it would break the source tarball / editable installs), so we inline a short description
+# here. See the repository README for full documentation.
+readme = {text = "GraspQP: differentiable optimization of force closure for diverse and robust dexterous grasping. See the repository README for full documentation.", content-type = "text/markdown"}
+requires-python = ">=3.10"
+authors = [
+    {name = "René Zurbrügg", email = "rene.zurbruegg@inf.ethz.ch"},
+]
+license = {text = "MIT"}
 
 dependencies = [
     "numpy==1.26.4",
     "scipy==1.15.3",
     "transforms3d==0.4.2",
     "trimesh==4.8.0",
+    "pycollada==0.9",  # trimesh backend for the Schunk hand's COLLADA (.dae) meshes
     "lxml==6.0.1",
     "rtree==1.4.1","roma==1.5.4", "pyaml==25.7.0", "six==1.17.0",
+    # Default SDF backend (WARP) + hand kinematics. Both install without any CUDA/nvcc
+    # compilation -- WARP ships prebuilt wheels and pytorch_kinematics is pure Python -- so
+    # the base install is lightweight and works out of the box with SDF_BACKEND=WARP (default).
+    "warp-lang",
+    # Pinned: the fork's HEAD has a forward-kinematics regression that breaks batched
+    # (batch>1) FK, which grasp synthesis relies on. This commit matches the
+    # thirdparty/pytorch_kinematics submodule and supports batched FK.
+    "pytorch_kinematics @ git+https://github.com/renezurbruegg/pytorch_kinematics@92c3b97bd2d7d99c5c5852dba2bb9be545f400ee",
 ]
 
 [project.optional-dependencies]
@@ -24,8 +44,10 @@ dev = [
     "mypy>=1.9.0",
     "pytest==8.4.1",
 ]
+# Compiled CUDA backends. These build from source and REQUIRE the CUDA toolkit (nvcc), so they
+# are NOT part of the lightweight default. Only needed for the non-default SDF backends
+# (TorchSDF; Kaolin is installed separately from the NVIDIA index) and pytorch3d ops.
 third_party = [
-    "pytorch_kinematics @ git+https://github.com/renezurbruegg/pytorch_kinematics",
     "TorchSDF @ git+https://github.com/renezurbruegg/TorchSDF",
     "pytorch3d @ git+https://github.com/facebookresearch/pytorch3d.git@stable"
 ]
@@ -40,11 +62,14 @@ viz = [
 log = [
     "wandb==0.21.3",
 ]
+# Lightweight default: WARP backend + pytorch_kinematics (both in base deps) plus
+# visualization/logging/optimizer. No CUDA toolkit / nvcc compilation required.
+lite = [
+    "graspqp[viz,log,opt]",
+]
+# Everything, including the compiled TorchSDF backend + pytorch3d (needs CUDA toolkit / nvcc).
 full = [
     "graspqp[viz,log,opt,third_party]",
-]
-core = [
-    "graspqp",
 ]
 
 [tool.black]

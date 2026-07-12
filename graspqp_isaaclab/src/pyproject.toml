@@ -3,7 +3,7 @@ name = 'graspqp_isaaclab'
 requires-python = ">=3.9"
 version = "1.0.0"
 authors = [
-    {name = "Your Name", email = "you@yourdomain.com"},
+    {name = "René Zurbrügg", email = "rene.zurbruegg@inf.ethz.ch"},
 ]
 
 [build-system]

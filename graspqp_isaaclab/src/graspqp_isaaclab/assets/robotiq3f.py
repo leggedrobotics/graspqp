@@ -1,3 +1,6 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+
 import math
 import os
 
@@ -70,6 +73,6 @@ ROBOTIQ_3F_CFG = HandModelCfg(
     soft_joint_pos_limit_factor=1.0,
     actuated_joints_expr=ROBOTIQ_3F_ACTUATED_JOINT_NAMES,
     mimic_joints={},
-    hand_model_name="robotiq3f",
+    hand_model_name="robotiq3",
 )
 """Configuration of Shadow Hand robot."""

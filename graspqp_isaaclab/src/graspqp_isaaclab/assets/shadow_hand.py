@@ -1,3 +1,6 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+
 import os
 
 import isaaclab.sim as sim_utils
@@ -16,52 +19,52 @@ SHADOW_HAND_CFG = HandModelCfg(
             "shadow_hand",
             "shadow_hand.usd",
         ),
-        activate_contact_sensors=False,
+        activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=True,
             retain_accelerations=True,
-            max_depenetration_velocity=1000.0,
+            max_depenetration_velocity=10.0,
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-            enabled_self_collisions=False,
-            solver_position_iteration_count=8,
+            enabled_self_collisions=True,
+            solver_position_iteration_count=16,
             solver_velocity_iteration_count=0,
             sleep_threshold=0.00,
             stabilization_threshold=0.0005,
         ),
-        collision_props=sim_utils.CollisionPropertiesCfg(contact_offset=0.005, rest_offset=0.0),
+        collision_props=sim_utils.CollisionPropertiesCfg(contact_offset=0.015, rest_offset=0.0),
         joint_drive_props=sim_utils.JointDrivePropertiesCfg(drive_type="force"),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.5),
+        pos=(0.0, 0.0, 0.0),
         rot=(1.0, 0.0, 0.0, 0.0),
         joint_pos={".*": 0.0},
     ),
     actuators={
         "fingers": ImplicitActuatorCfg(
-            joint_names_expr=["robot0_WR.*", "robot0_(FF|MF|RF|LF|TH)J(3|2|1)", "robot0_(LF|TH)J4", "robot0_THJ0"],
+            joint_names_expr=["robot0_(FF|MF|RF|LF|TH)J(3|2|1)", "robot0_(LF|TH)J4", "robot0_THJ0"],
             effort_limit={
                 # ".*": .78,
-                "robot0_WRJ1": 4.785,
-                "robot0_WRJ0": 2.175,
+                # "robot0_WRJ1": 4.785,
+                # "robot0_WRJ0": 2.175,
                 "robot0_(FF|MF|RF|LF)J1": 0.7245,
                 "robot0_FFJ(3|2)": 0.9,
                 "robot0_MFJ(3|2)": 0.9,
                 "robot0_RFJ(3|2)": 0.9,
                 "robot0_LFJ(4|3|2)": 0.9,
-                "robot0_THJ4": 2.3722,
+                "robot0_THJ4": 1.3722,
                 "robot0_THJ3": 1.45,
                 "robot0_THJ(2|1)": 0.99,
                 "robot0_THJ0": 0.81,
             },
             stiffness={
-                "robot0_WRJ.*": 100.0,
+                # "robot0_WRJ.*": 100.0,
                 "robot0_(FF|MF|RF|LF|TH)J(3|2|1)": 100.0,
                 "robot0_(LF|TH)J4": 100.0,
                 "robot0_THJ0": 100.0,
             },
             damping={
-                "robot0_WRJ.*": 0.05,
+                # "robot0_WRJ.*": 0.05,
                 "robot0_(FF|MF|RF|LF|TH)J(3|2|1)": 0.01,
                 "robot0_(LF|TH)J4": 0.01,
                 "robot0_THJ0": 0.01,
@@ -72,8 +75,8 @@ SHADOW_HAND_CFG = HandModelCfg(
         ),
     },
     actuated_joints_expr=[
-        "robot0_WRJ1",
-        "robot0_WRJ0",
+        # "robot0_WRJ1",
+        # "robot0_WRJ0",
         "robot0_FFJ3",
         "robot0_MFJ3",
         "robot0_RFJ3",
@@ -99,4 +102,49 @@ SHADOW_HAND_CFG = HandModelCfg(
     ],
     soft_joint_pos_limit_factor=1.0,
     hand_model_name="shadow_hand",
+)
+
+SHADOW_HAND_FLOATING_CFG = SHADOW_HAND_CFG.copy()
+
+SHADOW_HAND_FLOATING_CFG.spawn.usd_path = os.path.join(
+    os.path.dirname(__file__),
+    "shadow_hand",
+    "shadow_hand_free.usd",
+)
+SHADOW_HAND_FLOATING_CFG.actuators["wrist"] = ImplicitActuatorCfg(
+    joint_names_expr=["dummy.*"],
+    effort_limit={
+        "dummy_base_prismatic_x_joint": 100.0,
+        "dummy_base_prismatic_y_joint": 100.0,
+        "dummy_base_prismatic_z_joint": 100.0,
+        "dummy_base_revolute_x_joint": 50.0,
+        "dummy_base_revolute_y_joint": 50.0,
+        "dummy_base_revolute_z_joint": 50.0,
+    },
+    velocity_limit=10.0,
+    stiffness={
+        "dummy_base_prismatic_x_joint": 150.0,
+        "dummy_base_prismatic_y_joint": 150.0,
+        "dummy_base_prismatic_z_joint": 150.0,
+        "dummy_base_revolute_x_joint": 50.0,
+        "dummy_base_revolute_y_joint": 50.0,
+        "dummy_base_revolute_z_joint": 50.0,
+    },
+    damping={
+        "dummy_base_prismatic_x_joint": 15.0,
+        "dummy_base_prismatic_y_joint": 15.0,
+        "dummy_base_prismatic_z_joint": 15.0,
+        "dummy_base_revolute_x_joint": 5.0,
+        "dummy_base_revolute_y_joint": 5.0,
+        "dummy_base_revolute_z_joint": 5.0,
+    },
+    friction=0.15,
+    armature=0.003,
+)
+
+SHADOW_HAND_FLOATING_CFG.spawn.variants = {"Camera": "Enabled"}
+SHADOW_HAND_FLOATING_CFG.init_state = ArticulationCfg.InitialStateCfg(
+    pos=(0.0, 0.0, 0.0),
+    rot=(1.0, 0.0, 0.0, 0.0),
+    joint_pos={"dummy_base_revolute_y_joint": 3.1415},
 )

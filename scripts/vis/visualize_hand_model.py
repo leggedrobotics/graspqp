@@ -1,3 +1,9 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+#
+# Portions derived from DexGraspNet (https://github.com/PKU-EPIC/DexGraspNet),
+# MIT License, Copyright (c) 2023 Jialiang Zhang, Ruicheng Wang.
+
 """
 Based on Dexgraspnet: https://pku-epic.github.io/DexGraspNet/
 """
@@ -31,6 +37,9 @@ if __name__ == "__main__":
     arg_parser.add_argument("--show_joint_axes", action="store_true", help="show joint axes")
     arg_parser.add_argument("--show_penetration_points", action="store_true", help="show penetration points")
     arg_parser.add_argument("--show_occupancy_grid", action="store_true", help="show occupancy grid")
+    arg_parser.add_argument(
+        "--only_collision", action="store_true", help="render collision meshes instead of visual meshes"
+    )
     arg_parser.add_argument("--randomize_joints", action="store_true", help="randomize joint angles")
     arg_parser.add_argument("--spacing", type=float, default=0.25, help="spacing for visualization")
     arg_parser.add_argument("--grasp_type", type=str, default="all", help="grasp type")
@@ -45,7 +54,8 @@ if __name__ == "__main__":
 
     data = []
     for idx, hand_name in enumerate(hand_names):
-        hand_model = get_hand_model(hand_name, args.device, grasp_type=args.grasp_type)
+        extra_kwargs = {"only_use_collision": True} if args.only_collision else {}
+        hand_model = get_hand_model(hand_name, args.device, grasp_type=args.grasp_type, **extra_kwargs)
 
         joint_angles = hand_model.default_state
         if args.randomize_joints:
@@ -202,38 +212,41 @@ if __name__ == "__main__":
             x, y, z = torch.meshgrid(x, y, z)
             pts = torch.stack([x.flatten(), y.flatten(), z.flatten()], dim=1).to(device)
 
-            # calc distances
-            pts_distances = hand_model.cal_distance(pts)
-            # print("Hand Pose:", hand_pose)
-            # print("Min Distance:", pts_distances)
-            # loss = pts_distances.sum()
-            # print("Loss:", loss)
-            # # loss = hand_pose.sum()
-            # loss.backward()
-            # print("Gradient:", hand_pose.grad)
+            # calc distances + which link owns each query point (max signed distance)
+            pts_distances, link_idx = hand_model.cal_distance(pts.unsqueeze(0), return_link_index=True)
+            pts_distances = pts_distances[0].detach().cpu()
+            link_idx = link_idx[0].detach().cpu()
 
-            pts_distances = pts_distances.detach().cpu()
             th = -0.002
-            pts = pts[pts_distances[0] > th]
-            pts_distances = pts_distances[pts_distances > th]
-            # pts_distances = pts_distances[pts_distances < 0.005]
-            # pts = pts[torch.logical_and(pts_distances[0] > 0 , pts_distances[0] < 0.05)]
-            # pts = pts[pts_distances[0] > -10]
-            # pts_distances[pts_distances <= 0] = -0.5
-            # pts_distances[pts_distances > 0] = 0.5
-            colors = (
-                (pts_distances - pts_distances.min()) / (pts_distances.max() - pts_distances.min() + 1e-6) * 100
-            ).squeeze()
+            mask = pts_distances > th
+            pts = pts[mask]
+            kept_dist = pts_distances[mask]
+            kept_link = link_idx[mask]
             pts = pts.detach().cpu().numpy()
-            data += [
-                go.Scatter3d(
-                    x=pts[:, 0],
-                    y=pts[:, 1],
-                    z=pts[:, 2],
-                    mode="markers",
-                    marker=dict(size=5, color=colors, colorscale="RdBu", opacity=1.0),
-                )
+
+            link_names = hand_model.link_names
+            # A distinct color per link; one legend entry per link so you can read off
+            # which body part each occupied region belongs to.
+            palette = pio.templates["plotly"].layout.colorway or [
+                "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
+                "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf",
             ]
+            for li in torch.unique(kept_link).tolist():
+                sel = (kept_link == li).numpy()
+                if not sel.any():
+                    continue
+                lname = link_names[li] if li < len(link_names) else f"link_{li}"
+                data += [
+                    go.Scatter3d(
+                        x=pts[sel, 0],
+                        y=pts[sel, 1],
+                        z=pts[sel, 2],
+                        mode="markers",
+                        marker=dict(size=4, color=palette[li % len(palette)], opacity=1.0),
+                        name=lname,
+                        legendgroup=lname,
+                    )
+                ]
         data = hand_plotly + surface_points_plotly + contact_candidates_plotly + coordinate_system + data
 
     fig = go.Figure(data)

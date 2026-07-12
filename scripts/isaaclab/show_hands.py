@@ -1,3 +1,5 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+#
 # Copyright (c) 2022-2025, The Isaac Lab Project Developers.
 # All rights reserved.
 #
@@ -36,6 +38,7 @@ import isaaclab.sim as sim_utils
 import isaacsim.core.utils.prims as prim_utils
 import numpy as np
 import torch
+
 ##
 # Pre-defined configs
 ##

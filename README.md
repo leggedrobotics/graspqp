@@ -18,6 +18,19 @@
 
 This is the official implementation of “GraspQP: Differentiable Optimization of Force Closure for Diverse and Robust Dexterous Grasping” (CoRL 2025).
 
+> ### ⚠️ Isaac Lab stack update
+> Most changes on this branch target the **integration with [DexEvolve](https://github.com/leggedrobotics/DexEvolve)**:
+> the `graspqp_isaaclab` simulation package and the Docker stack now target **Isaac Sim 5.1 /
+> Isaac Lab 2.3** (PyTorch 2.7 + CUDA 12.8, Python 3.11), bringing API changes (e.g.
+> `isaaclab.ui.components`, the `Articulation._create_data` hook, `ComponentCfg` scene entities)
+> that older Isaac Lab releases do not provide.
+>
+> - The lightweight **WARP-only `graspqp`** install (no simulator) is unaffected — it still runs
+>   on Python 3.10+ / CUDA 12.x.
+> - **For faithful reproduction of the GraspQP (CoRL 2025) paper** — or the previous Isaac Sim
+>   4.5 / Isaac Lab 2.x stack — check out the [`graspqp`](../../releases/tag/graspqp) tag:
+>   `git checkout tags/graspqp`.
+
 ## Abstract
 
 GraspQP synthesizes diverse, robust dexterous grasps by optimizing a differentiable energy that encodes force closure via a quadratic program (QP). Coupling analytic hand kinematics and contact models with signed-distance fields enables gradient-based optimization over hand pose and joint angles. The method generalizes across hands and object categories, produces both precision and power grasps, and integrates with simulation for large-scale evaluation.
@@ -26,7 +39,7 @@ GraspQP synthesizes diverse, robust dexterous grasps by optimizing a differentia
 
 - Differentiable force-closure energy via QP (qpth) with friction-cone approximations.
 - Distribution aware MALA\* optimizer.
-- SDF-based contact modeling; backends: TorchSDF (default), Warp, Kaolin (select with `SDF_BACKEND`)
+- SDF-based contact modeling; backends: Warp (default), TorchSDF, Kaolin (select with `SDF_BACKEND`)
 - Hand kinematics and Jacobians via pytorch_kinematics; analytic Jacobians for select grippers
 - Isaac Lab integration for batched evaluation and visualization
 
@@ -41,6 +54,7 @@ Prerequisites:
 
 - Linux, Python 3.10+
 - CUDA-capable GPU with a matching PyTorch build
+- CUDA toolkit (`nvcc`) — **only** for the full install (compiles the TorchSDF/Kaolin backends). The default lightweight install does not need it.
 - Optional: NVIDIA Isaac Lab (for simulator-based evaluation)
 
 ```bash
@@ -56,9 +70,21 @@ cd graspqp
 conda create -n graspqp python=3.11
 conda activate graspqp
 
-# Install GraspQP and dependencies
 cd graspqp  # enter the package folder containing pyproject.toml
-pip install -e .[full] --no-build-isolation
+
+# Install PyTorch first, matched to your CUDA driver — it is NOT installed automatically.
+# See https://pytorch.org/get-started/locally/ , e.g. for CUDA 12.8:
+#   pip install torch==2.7.0 --index-url https://download.pytorch.org/whl/cu128
+
+# (Recommended) Lightweight install — WARP backend, NO CUDA/nvcc compilation.
+# Pulls only prebuilt wheels + pytorch_kinematics (pure Python) from git.
+pip install -e '.[lite]' --no-build-isolation
+
+# --- OR ---
+
+# Full install — additionally builds the TorchSDF backend + pytorch3d from source.
+# Requires the CUDA toolkit (nvcc). Kaolin, if wanted, is installed separately (see Docker).
+pip install -e '.[full]' --no-build-isolation
 
 # Optional: install Isaac Lab integration
 cd ../graspqp_isaaclab/src
@@ -67,57 +93,70 @@ pip install -e .
 
 Notes:
 
-- Default SDF backend is TorchSDF. Switch via `export SDF_BACKEND=TORCHSDF|WARP|KAOLIN`.
+- **Default SDF backend is WARP** (no compilation). Switch via `export SDF_BACKEND=WARP|TORCHSDF|KAOLIN`; `TORCHSDF`/`KAOLIN` require the full install.
+- **The WARP path needs no compiled extensions.** With the default WARP backend, `TorchSDF`,
+  `Kaolin` and even `pytorch3d` are all optional: TorchSDF/Kaolin are only imported for their
+  respective `SDF_BACKEND`, and mesh/point sampling falls back to a pure-PyTorch implementation
+  (`graspqp.core.pytorch3d_compat`) when `pytorch3d` is absent. The full grasp-synthesis
+  pipeline (`scripts/fit.py`) runs end-to-end on a `[lite]` install with none of them present.
+- The lightweight `[lite]` install needs no CUDA toolkit — WARP ships wheels and `pytorch_kinematics` is pure Python. Only `[full]` (TorchSDF/pytorch3d) invokes `nvcc`.
 - Ensure your CUDA drivers match the installed PyTorch.
+- Use an **editable** install (`pip install -e`): the bundled robot assets (URDFs, meshes,
+  cached states) live under `graspqp/assets/` and are resolved by path at runtime, so a
+  non-editable wheel install will not find them.
 - For Plotly interactive visuals: `export PLOTLY_RENDERER=browser`.
 - Optionally pin the GPU: `export CUDA_VISIBLE_DEVICES=0`.
 
 </details>
 
 <details>
-<summary><b>Docker installation (includes CUDA 12.8)</b></summary>
+<summary><b>Docker installation</b></summary>
 
-We provide two Docker setups:
+We provide three Dockerfiles (build with the repo root as context):
 
-- `graspqp_isaaclab`: builds on an Isaac Lab base image and installs GraspQP for simulation workflows
-- `graspqp`: a standalone PyTorch+CUDA base for offline optimization/visualization
-
-1a) Build the Isaac Lab image:
-
-```bash
-git clone https://github.com/isaac-sim/IsaacLab.git
-cd IsaacLab
-# Build the docker base container
-./docker/container.py start
-cd ..
-
-# Build graspqp_isaaclab image on top of the Isaac Lab base image
-./docker/build_isaaclab_docker.sh
-```
-
-1b) Build the standalone GraspQP image:
+- **`docker/Dockerfile`** (default, lightweight): WARP backend only. Builds on a CUDA **runtime**
+  base — **no `nvcc`, no source compilation** — installing only WARP + `pytorch_kinematics`.
+- **`docker/Dockerfile.torchsdf`** (full): all backends (WARP + TorchSDF + Kaolin). Builds on a
+  CUDA **devel** base because TorchSDF/pytorch3d are compiled from source with `nvcc`.
+- **`docker/Dockerfile.isaaclab`** (simulator): the `graspqp_isaaclab` image — graspqp +
+  `graspqp_isaaclab` on top of an `isaac-lab-base` image (from **Isaac Lab 2.3 / Isaac Sim 5.1**,
+  torch 2.7 + cu128). This is the base the Isaac Lab tooling (`scripts/isaaclab/*`) and
+  downstream projects (e.g. DexEvolve) build on. **Defaults to a WARP-only build** (no CUDA
+  toolkit / pytorch3d / TorchSDF / Kaolin — no `nvcc`, ~2 min); pass `WITH_COMPILED_BACKENDS=1`
+  to add them (needed only for `SDF_BACKEND=TORCHSDF|KAOLIN`).
 
 ```bash
-docker compose --env-file docker/.env.base --file docker/docker-compose.yaml build graspqp
+# clone (repo root is the build context)
+git clone https://github.com/leggedrobotics/graspqp.git --recurse-submodules
+cd graspqp
+
+# (Recommended) lightweight WARP image
+docker build -f docker/Dockerfile -t graspqp:warp .
+docker run --rm --gpus all -it graspqp:warp
+
+# Full image with all SDF backends (needs a CUDA toolkit at build time)
+docker build -f docker/Dockerfile.torchsdf -t graspqp:full .
+docker run --rm --gpus all -e SDF_BACKEND=TORCHSDF -it graspqp:full   # or WARP / KAOLIN
+
+# Isaac Lab image (graspqp_isaaclab) — requires an `isaac-lab-base` image to already exist
+# (build it from an Isaac Lab 2.3 / Isaac Sim 5.1 checkout, e.g. `./docker/container.py start base`)
+./docker/build_isaaclab_docker.sh                            # WARP-only (default, ~2 min)
+WITH_COMPILED_BACKENDS=1 ./docker/build_isaaclab_docker.sh   # + pytorch3d/TorchSDF/kaolin
+docker run --rm --gpus all -e ACCEPT_EULA=Y --entrypoint bash -it graspqp_isaaclab
 ```
 
-2. Run containers:
-
-```bash
-# Isaac Lab-enabled container (host networking, GPU access)
-docker compose --env-file docker/.env.base --file docker/docker-compose.yaml run --rm --gpus all graspqp_isaaclab
-
-# Standalone container
-docker compose --env-file docker/.env.base --file docker/docker-compose.yaml run --rm --gpus all graspqp
-```
-
-Bind mounts configured in `docker/docker-compose.yaml` map your repo into the container and mount `/data` for datasets.
+Both default to `SDF_BACKEND=WARP`. The base image tag (torch/CUDA) is overridable via
+`--build-arg PYTORCH_IMAGE=...`; if you change it for the full image, update the matching Kaolin
+wheel index URL inside `docker/Dockerfile.torchsdf`. Mount datasets with `-v /host/data:/data`.
 
 </details>
 
 ## Quickstart demos
 
-- Visualize a hand model (Plotly):
+Run these from the **repository root** (`cd` back out of the `graspqp/` package folder used
+during installation).
+
+- Visualize a hand model (Plotly). Add `--device cpu` on machines without a GPU:
 
 ```bash
 python scripts/vis/visualize_hand_model.py --hand_name allegro
@@ -197,7 +236,18 @@ We thank the community for open-source components that enabled this work (e.g., 
 
 ## License
 
-This project is licensed under the terms of the [MIT License](./LICENSE).
+© 2025 ETH Zurich, René Zurbrügg.
+
+This project is licensed under the terms of the [MIT License](./LICENSE). See
+[AUTHORS](./AUTHORS) for the list of creators and [NOTICE](./NOTICE) for
+third-party components and their licenses.
+
+Some files (the `graspqp_isaaclab` package and several scripts) are derived from
+[NVIDIA Isaac Lab](https://github.com/isaac-sim/IsaacLab) and remain under the
+BSD-3-Clause license; portions of the grasp-optimization code are derived from
+[DexGraspNet](https://github.com/PKU-EPIC/DexGraspNet) (MIT). Bundled robot hand
+and gripper models are the property of their respective manufacturers and are
+**not** covered by this repository's license — see [NOTICE](./NOTICE).
 
 ## Contact
 

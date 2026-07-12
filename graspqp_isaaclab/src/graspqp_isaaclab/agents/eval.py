@@ -1,3 +1,6 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+
 """
 Agent evaluation wrapper for grasp quality assessment and statistics collection.
 """
@@ -6,10 +9,9 @@ import os
 import time
 
 import torch
-from graspqp_isaaclab.utils.eval import (RunningStatistics,
-                                         calc_entropy_for_grasps,
-                                         calc_unique_grasps)
+from graspqp_isaaclab.utils.eval import RunningStatistics, calc_entropy_for_grasps, calc_unique_grasps
 
+from isaaclab.sim import SimulationContext
 from .base import Agent
 
 
@@ -134,14 +136,17 @@ class AgentEvalWrapper(Agent):
         fails = []
         for pull in rewards_each_pull:
             # A grasp fails if any reward in the pulling sequence is negative
-            fails.append(pull.min(axis=-1).values < 0.0)
+            # Strip first step, which sometimes might be lingering from previous phase
+            fails.append(pull[:, 1:].min(axis=-1).values < 0.0)
 
         # Success per axis (x, y, z) - invert failure flags
         succ_per_axis = ~torch.stack(fails, -1)[..., :3]
         self._results.append(~torch.stack(fails, -1)[..., :3])
 
         self._statistics.update(envs, (~torch.stack(fails, -1)[..., :3]).any(dim=-1))
-        self._statistics.update_info(envs, x_axis=succ_per_axis[:, 0], y_axis=succ_per_axis[:, 1], z_axis=succ_per_axis[:, 2])
+        self._statistics.update_info(
+            envs, x_axis=succ_per_axis[:, 0], y_axis=succ_per_axis[:, 1], z_axis=succ_per_axis[:, 2]
+        )
         self._statistics.update_info(envs, all_axis=succ_per_axis.all(dim=-1))
 
         # observations = torch.cat(self.observations, -1)
@@ -155,14 +160,16 @@ class AgentEvalWrapper(Agent):
             for agent in self._agent._agents:
                 env_ids = agent._env_ids
 
-                non_failing_envs = self._statistics.sucesses[env_ids] >= 0.5 * self._statistics.trials[env_ids].clamp(min=1)
+                non_failing_envs = self._statistics.sucesses[env_ids] >= 0.5 * self._statistics.trials[env_ids].clamp(
+                    min=1
+                )
 
-                joint_positions = agent._joint_positions
+                joint_positions = agent._joint_positions.clone()
                 hand_poses = agent._hand_poses
 
                 joints_entropy, position_entropy, orientation_entropy = calc_entropy_for_grasps(
-                    joint_positions[non_failing_envs],
-                    hand_poses[non_failing_envs],
+                    joint_positions[non_failing_envs].clone(),
+                    hand_poses[non_failing_envs].clone(),
                     self.env,
                 )
                 self._statistics.update_info(env_ids, joints_entropy=joints_entropy, fix=True)
@@ -171,17 +178,30 @@ class AgentEvalWrapper(Agent):
 
                 # Define precision levels for grasp uniqueness evaluation
                 # These thresholds determine when two grasps are considered "unique"
-                precision_joints = [0.5, 0.2, 0.1]  # Joint position precision (radians)
-                precision_positions = [2e-1, 2e-2, 1e-2]  # Hand position precision (meters)
-                precision_deg = [  # Hand orientation precision (degrees)
-                    45 * 180 / torch.pi,
-                    5 * 180 / torch.pi,
-                    2.5 * 180 / torch.pi,
+                precision_joints_list = [
+                    90 * torch.pi / 180,
+                    45 * torch.pi / 180,
+                    5 * torch.pi / 180,
+                ]  # Joint position precision (radians)
+                
+                precision_positions_list = [
+                    0.2,
+                    0.05,
+                    0.01
+                ]  # Hand position precision (meters)
+                
+                precision_degs_list = [  # Hand orientation precision (degrees)
+                                 90 * torch.pi / 180,
+                                 45 * torch.pi / 180,
+                                 5 * torch.pi / 180,
                 ]
-                names = ["20cm_05_450deg", "2cm_050deg", "1cm_025deg"]  # Descriptive names for precision levels
+                
+                # 90deg,0.2m,90deg
+                names = ["20cm_90deg_90deg", "20cm_45deg_45deg", "2cm_45deg_45deg", "1cm_5deg_5deg"]  # Descriptive names for precision levels
 
+                # import pdb; pdb.set_trace()
                 for name, precision_joint, precision_pos, precision_deg in zip(
-                    names, precision_joints, precision_positions, precision_deg
+                    names, precision_joints_list, precision_positions_list, precision_degs_list
                 ):
                     unique_grasps, unique_working_grasps = calc_unique_grasps(
                         joint_positions.clone(),
@@ -210,9 +230,23 @@ class AgentEvalWrapper(Agent):
             rewards (torch.Tensor): Environment rewards
         """
         self.steps += 1
-        self._agent.update_envs(observations, rewards)
+        self._agent.update_envs(observations, rewards.clone())
         self.observations.append(observations)
-        self.rewards.append(rewards)
+        failed_envs = rewards < 0.0
+
+        # draw_interface = SimulationContext.instance().draw_interface
+        # print("Failed envs at step", self.steps, ":", failed_envs.squeeze(-1).nonzero(as_tuple=False).squeeze(-1).cpu().numpy())
+        # pts = observations["object_pos"][..., :3] + self.env.scene.env_origins
+        # colors = torch.zeros(pts.shape[0], 4, device=pts.device)
+        # colors[failed_envs.squeeze()] = torch.tensor([1.0, 0.0, 0.0, 1.0], device=pts.device)  # red for failed
+        # colors[~failed_envs.squeeze()] = torch.tensor([0.0, 1.0, 0.0, 1.0], device=pts.device)  # green for success
+        # draw_interface.plot_points(
+        #     pts.reshape(-1, 3).cpu().numpy().tolist(),
+        #     color=colors.reshape(-1, 4).cpu().numpy().tolist(),
+        #     size=25,
+        # )
+
+        self.rewards.append(rewards.clone())
 
     def finished(self, suffix=""):
         """
@@ -236,7 +270,7 @@ class AgentEvalWrapper(Agent):
             file_name=("dexgrasp_eval_isaac_sim.csv" if suffix == "" else f"dexgrasp_eval_isaac_sim_{suffix}.csv"),
         )
         # print full statistics
-        self._statistics.print_statistics(full_statistics=True)
+        # self._statistics.print_statistics(full_statistics=True)
         self._statistics.print_statistics(full_statistics=False)
 
         for idx, agent in enumerate(self._agent._agents):
@@ -270,3 +304,101 @@ class AgentEvalWrapper(Agent):
         """
         df = self._statistics.get_df()
         return df
+
+
+class HandleAgentEvalWrapper(AgentEvalWrapper):
+
+    def reset_envs(self, envs, succeeded):
+        """
+        Reset specific environments and evaluate grasp performance.
+
+        This method processes completed grasp attempts by:
+        1. Analyzing rewards across different pulling directions (x, y, z axes)
+        2. Determining success/failure for each axis and overall performance
+        3. Updating statistics with success rates and additional metrics
+        4. Computing grasp diversity metrics (entropy, uniqueness) when sufficient data exists
+        5. Saving successful and failed grasps to output files
+
+        Args:
+            envs (torch.Tensor): Environment IDs to reset
+            succeeded (torch.Tensor): Boolean tensor indicating environment success status
+        """
+
+        rewards = torch.cat(self.rewards, -1)
+
+        succ = rewards >= 0
+        self._results.append(succ)
+        # `succ` covers all envs (rewards are appended for every env each step), but only the
+        # `envs` subset has just terminated. With a single synchronized asset these coincide;
+        # with multiple assets termination desyncs, so index `succ` by the terminated envs to
+        # keep the update aligned (otherwise: "size of tensor a (N) must match b (M)").
+        self._statistics.update(envs, succ.all(dim=-1)[envs])
+
+        # observations = torch.cat(self.observations, -1)
+        self.rewards = []
+        self.observations = []
+
+        # COMPREHENSIVE EVALUATION: Compute advanced metrics when sufficient trials exist
+        finished = self._statistics.trials.min().item() > 0
+        if finished:
+            # Calculate final statistics including entropy and grasp uniqueness metrics
+            for agent in self._agent._agents:
+                env_ids = agent._env_ids
+
+                non_failing_envs = self._statistics.sucesses[env_ids] >= 0.5 * self._statistics.trials[env_ids].clamp(
+                    min=1
+                )
+
+                joint_positions = agent._joint_positions.clone()
+                hand_poses = agent._hand_poses
+
+                joints_entropy, position_entropy, orientation_entropy = calc_entropy_for_grasps(
+                    joint_positions[non_failing_envs].clone(),
+                    hand_poses[non_failing_envs].clone(),
+                    self.env,
+                )
+                self._statistics.update_info(env_ids, joints_entropy=joints_entropy, fix=True)
+                self._statistics.update_info(env_ids, position_entropy=position_entropy, fix=True)
+                self._statistics.update_info(env_ids, orientation_entropy=orientation_entropy, fix=True)
+
+                # Define precision levels for grasp uniqueness evaluation
+                # These thresholds determine when two grasps are considered "unique"
+                precision_positions_list = [
+                    0.2,
+                    0.05,
+                    0.01
+                ]  # Hand position precision (meters)
+                precision_joints_list = [
+                    90 * torch.pi / 180,
+                    45 * torch.pi / 180,
+                    5 * torch.pi / 180,
+                ]  # Joint position precision (radians)
+                
+                
+                precision_degs_list = [  # Hand orientation precision (degrees)
+                                 90 * torch.pi / 180,
+                                 45 * torch.pi / 180,
+                                 5 * torch.pi / 180,
+                ]
+                
+                # 90deg,0.2m,90deg
+                names = ["20cm_90deg_90deg", "20cm_45deg_45deg", "2cm_45deg_45deg", "1cm_5deg_5deg"]  # Descriptive names for precision levels
+
+                # import pdb; pdb.set_trace()
+                for name, precision_joint, precision_pos, precision_deg in zip(
+                    names, precision_joints_list, precision_positions_list, precision_degs_list
+                ):
+                    unique_grasps, unique_working_grasps = calc_unique_grasps(
+                        joint_positions.clone(),
+                        hand_poses.clone(),
+                        precision_pos,
+                        precision_joint,
+                        precision_deg,
+                        non_failing_envs,
+                    )
+                    self._statistics.update_info(env_ids, **{f"good_grasps_{name}": unique_working_grasps}, fix=True)
+                    self._statistics.update_info(
+                        env_ids,
+                        **{f"grasps_{name}": unique_grasps},
+                        fix=True,
+                    )

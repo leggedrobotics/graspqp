@@ -1,3 +1,9 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+#
+# Portions derived from DexGraspNet (https://github.com/PKU-EPIC/DexGraspNet),
+# MIT License, Copyright (c) 2023 Jialiang Zhang, Ruicheng Wang.
+
 """
 Based on Dexgraspnet: https://pku-epic.github.io/DexGraspNet/
 """
@@ -19,8 +25,7 @@ from graspqp.core.optimizer import AnnealingDexGraspNet, MalaStar
 from graspqp.hands import AVAILABLE_HANDS, get_hand_model
 from graspqp.metrics import GraspSpanMetricFactory
 from graspqp.utils.plot_utils import get_plotly_fig, show_initialization
-from graspqp.utils.transforms import \
-    robust_compute_rotation_matrix_from_ortho6d
+from graspqp.utils.transforms import robust_compute_rotation_matrix_from_ortho6d
 from graspqp.utils.wandb_wrapper import WandbMockup
 
 # prepare arguments
@@ -81,7 +86,7 @@ parser.add_argument(
     "--energy_type",
     default="graspqp",
     type=str,
-    choices=["dexgrasp", "graspqp", "tdg"],
+    choices=["dexgrasp", "graspqp", "tdg", "handle"],
 )
 
 parser.add_argument("--debug", action="store_true")
@@ -116,20 +121,20 @@ parser.add_argument("--max_lambda_limit", default=20.0, type=float)
 # Specific energy arguments
 parser.add_argument("--torque_weight", default=5.0, type=float)
 parser.add_argument("--n_friction_cone", default=4, type=int)
-parser.add_argument("--use_gendexgrasp", default=True, type=bool)
+parser.add_argument("--use_gendexgrasp", default=True, action=argparse.BooleanOptionalAction)
 parser.add_argument("--no_exp_term", action="store_true")  # Disable exploration term
 
 args = parser.parse_args()
 
 if args.data_root_path is None:
-    args.data_root_path = os.path.join("/data/release", args.dataset)
+    args.data_root_path = os.path.join("/path/to/data/release", args.dataset)
 
 # Check if PYTHON_EULER_ROOT env exists
 if "PYTHON_EULER_ROOT" in os.environ:
     pass
     # print("EULER CLUSTER DETECTED, will re-map data path")
     # args.data_root_path = args.data_root_path.replace(
-    #     "/data", "/cluster/scratch/zrene/data"
+    #     "/data", "/path/to/data"
     # )
 
 
@@ -296,6 +301,10 @@ def export_poses(hand_model, energy, object_model, suffix="None"):
         data["contact_idx"] = hand_model.contact_point_indices[start_idx:end_idx].detach().cpu()
         data["grasp_type"] = args.grasp_type
         data["contact_links"] = hand_model._contact_links
+        # Frame the exported root_pose is expressed in: graspqp optimizes/saves hand_model.hand_pose,
+        # which for a re-rooted hand (root_frame set, e.g. a "grasp_frame") is that frame's pose.
+        # Absent field => gripper root (the URDF/articulation root).
+        data["root_frame"] = getattr(hand_model, "_root_frame_name", None) or "gripper_root"
         torch.save(data, file_path)
         print(f"\033[94m==> Exported to {os.path.abspath(file_path)}\033[0m")
 
@@ -373,8 +382,7 @@ weight_dict = {
 energy_names = [e for e in weight_dict.keys() if weight_dict[e] > 0.0]
 
 energy_kwargs = {}
-if args.use_gendexgrasp:
-    energy_kwargs["method"] = "gendexgrasp"
+energy_kwargs["method"] = "gendexgrasp" if args.use_gendexgrasp else "dexgraspnet"
 energy_kwargs["svd_gain"] = args.w_svd
 
 
@@ -394,6 +402,31 @@ for loss_name, loss_value in losses.items():
 
 energy.sum().backward()
 optimizer.zero_grad()
+
+if os.environ.get("GRAD_DEBUG"):
+    # Attribute NaN in the JOINT gradient to a specific energy term at the init pose.
+    # Rebuild a fresh autograd graph (the one above was consumed by energy.sum().backward()).
+    _hp = hand_model.hand_pose.detach().clone().requires_grad_(True)
+    hand_model.set_parameters(_hp, hand_model.contact_point_indices)
+    probe = calculate_energy(hand_model, object_model, energy_names=energy_names,
+                             energy_fnc=energy_fnc, **energy_kwargs)
+    for _name, _val in probe.items():
+        hand_model.hand_pose.grad = None
+        (weight_dict[_name] * _val).sum().backward(retain_graph=True)
+        _g = hand_model.hand_pose.grad
+        _jn = int(torch.isnan(_g[:, 9:]).sum())
+        _rn = int(torch.isnan(_g[:, :9]).sum())
+        _gj = float(_g[:, 9:][~torch.isnan(_g[:, 9:])].abs().sum())
+        print(f"[probe] {_name:8s}: joint_nan={_jn:5d} root_nan={_rn:3d} sum|g_joint(finite)|={_gj:.3f}", flush=True)
+    # Restore a populated .grad so the optimizer loop below (which reads hand_pose.grad) doesn't hit
+    # a None. Re-run a full fresh forward+backward on the current (init) pose.
+    hand_model.hand_pose.grad = None
+    _pl = calculate_energy(hand_model, object_model, energy_names=energy_names,
+                           energy_fnc=energy_fnc, **energy_kwargs)
+    _pe = 0
+    for _k, _v in _pl.items():
+        _pe = _pe + weight_dict[_k] * _v
+    _pe.sum().backward()
 
 
 for step in tqdm(range(1, args.n_iter + 1), desc="optimizing"):
@@ -439,6 +472,15 @@ for step in tqdm(range(1, args.n_iter + 1), desc="optimizing"):
 
     new_energy.sum().backward()
 
+    if os.environ.get("GRAD_DEBUG") and (step % 200 == 0 or step == 1):
+        with torch.no_grad():
+            g = hand_model.hand_pose.grad
+            gr = g[:, :9].norm(dim=-1).mean().item()
+            gj = g[:, 9:].norm(dim=-1).mean().item()
+            en = {k: round((weight_dict[k] * v).mean().item(), 2) for k, v in new_energies.items()}
+            print(f"[grad] step {step}: |g_root|={gr:.4f} |g_joints|={gj:.4f} "
+                  f"j/r={gj/(gr+1e-9):.3f}  weighted_energies={en}", flush=True)
+
     if args.show_initialization:
         show_initialization(object_model, hand_model, args.batch_size)
 
@@ -450,6 +492,9 @@ for step in tqdm(range(1, args.n_iter + 1), desc="optimizing"):
             z_score,
             args.z_score_threshold,
         )
+        if os.environ.get("GRAD_DEBUG") and (step % 200 == 0 or step == 1):
+            print(f"[accept] step {step}: rate={accept.float().mean().item():.3f} "
+                  f"temp={t.float().mean().item():.4f}", flush=True)
 
         energy[accept] = new_energy[accept]
         for loss_name, loss_value in new_energies.items():
@@ -467,7 +512,8 @@ for step in tqdm(range(1, args.n_iter + 1), desc="optimizing"):
                 "entropy/joints_entropy": joints_entropy.mean(),
                 "entropy/translation_entropy": translation_entropy.mean(),
                 "entropy/rotation_entropy": rotation_entropy.mean(),
-                "entropy/total": 0.5 * joints_entropy.mean() + 0.5 * (translation_entropy.mean() + rotation_entropy.mean()),
+                "entropy/total": 0.5 * joints_entropy.mean()
+                + 0.5 * (translation_entropy.mean() + rotation_entropy.mean()),
                 "stats/score": score.mean(),
             }
             wandb.log(data, step=step, commit=False)

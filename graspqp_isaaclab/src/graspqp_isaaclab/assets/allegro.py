@@ -1,3 +1,6 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+
 import math
 import os
 
@@ -53,7 +56,7 @@ ALLEGRO_HAND_CFG = HandModelCfg(
             sleep_threshold=0.005,
             stabilization_threshold=0.0005,
         ),
-        # collision_props=sim_utils.CollisionPropertiesCfg(contact_offset=0.005, rest_offset=0.0),
+        collision_props=sim_utils.CollisionPropertiesCfg(contact_offset=1e-2, rest_offset=0.0),
         variants={"Fingertips": "Default"},
     ),
     init_state=ArticulationCfg.InitialStateCfg(
@@ -75,4 +78,41 @@ ALLEGRO_HAND_CFG = HandModelCfg(
     actuated_joints_expr=ALLEGRO_HAND_ACTUATED_JOINT_NAMES,
     soft_joint_pos_limit_factor=1.0,
     hand_model_name="allegro",
+)
+
+
+
+
+"""Configuration of Allegro Hand floating in the air."""
+
+
+
+ALLEGRO_HAND_STANDALONE_CFG = ALLEGRO_HAND_CFG.copy()
+ALLEGRO_HAND_STANDALONE_CFG.spawn.usd_path = os.path.join(
+    os.path.dirname(__file__),
+    "allegro",
+    "standalone_allegro.usd",
+)
+ALLEGRO_HAND_STANDALONE_CFG.actuators["wrist"] = ImplicitActuatorCfg(
+    joint_names_expr=["dummy.*"],
+    effort_limit=100,
+    velocity_limit=10.0,
+    stiffness={
+        "dummy_base_prismatic_x_joint": 50.0,
+        "dummy_base_prismatic_y_joint": 50.0,
+        "dummy_base_prismatic_z_joint": 50.0,
+        "dummy_base_revolute_x_joint": 25.0,
+        "dummy_base_revolute_y_joint": 25.0,
+        "dummy_base_revolute_z_joint": 25.0,
+    },
+    damping={ 
+        "dummy_base_prismatic_x_joint": 10.0,
+        "dummy_base_prismatic_y_joint": 10.0,
+        "dummy_base_prismatic_z_joint": 10.0,
+        "dummy_base_revolute_x_joint": 5.0,
+        "dummy_base_revolute_y_joint": 5.0,
+        "dummy_base_revolute_z_joint": 5.0,
+    },
+    friction=0.15,
+    armature=0.003,
 )

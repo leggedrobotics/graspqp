@@ -1,3 +1,6 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+
 """Environment registry module for managing Isaac Lab environment configurations.
 
 This module provides the infrastructure for creating and configuring environments
@@ -75,7 +78,12 @@ def get_env_cfg(args_cli, collapse_grippers=False):
 
     if args_cli.static_show:
         for asset in assets_cfg:
-            asset.rigid_props = sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True)
+            from graspqp_isaaclab.models.articulation_model_cfg import ArticulationModelCfg
+            if isinstance(env_cfg.scene.obj, ArticulationModelCfg):
+                env_cfg.scene.obj.joint_pos_limits_min = {".*": 0.0}
+                env_cfg.scene.obj.joint_pos_limits_max = {".*": 0.0}
+            else:
+                asset.rigid_props = sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True)
 
     if collapse_grippers:
         env_cfg.scene.obj.collision_group = -1  # Everything collides with objects (i.e. all hands collide with objects)

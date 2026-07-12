@@ -1,3 +1,6 @@
+# Copyright (c) 2025 ETH Zurich, René Zurbrügg
+# SPDX-License-Identifier: MIT
+
 """
 Colors the mesh vertices based on interaction frequency with the hand model.
 """
@@ -173,7 +176,7 @@ if __name__ == "__main__":
     arg_parser.add_argument(
         "--dir",
         type=str,
-        default="/data/DexGraspNet/tiny/core-camera-5265ff657b9db80cafae29a76344a143/grasp_predictions",
+        default="/path/to/data/tiny/core-camera-5265ff657b9db80cafae29a76344a143/grasp_predictions",
         help="directory to save the images",
     )
 
@@ -184,7 +187,7 @@ if __name__ == "__main__":
     arg_parser.add_argument("--max_grasps", type=int, default=-1, help="maximum number of grasps to visualize")
     arg_parser.add_argument("--calc_energy", action="store_true", help="calculate energy")
     arg_parser.add_argument(
-        "--vis_dir", type=str, default="/home/zrene/git/DexGraspNet/graspqp/_vis", help="directory to save visualization"
+        "--vis_dir", type=str, default="/path/to/graspqp/_vis", help="directory to save visualization"
     )
     arg_parser.add_argument("--headless", action="store_true", help="run in headless mode")
     arg_parser.add_argument("--overwrite", action="store_true", help="overwrite existing files")
