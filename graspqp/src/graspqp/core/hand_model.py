@@ -943,7 +943,10 @@ class HandModel(nn.Module):
                 if "faces" in mesh_data and mesh_data["faces"] is not None:
                     mesh_data["faces"] = mesh_data["faces"].to(device)
                 if "face_verts" in mesh_data and mesh_data["face_verts"] is not None:
-                    mesh_data["face_verts"] = mesh_data["face_verts"].to(device)
+                    # With the WARP SDF backend, face_verts is a wp.Mesh (device
+                    # is fixed at creation) and has no .to(); only move tensors.
+                    if hasattr(mesh_data["face_verts"], "to"):
+                        mesh_data["face_verts"] = mesh_data["face_verts"].to(device)
                 if "contact_candidates" in mesh_data and mesh_data["contact_candidates"] is not None:
                     mesh_data["contact_candidates"] = mesh_data["contact_candidates"].to(device)
                 if "normal_candidates" in mesh_data and mesh_data["normal_candidates"] is not None:
@@ -1301,12 +1304,18 @@ class HandModel(nn.Module):
             diff = x.unsqueeze(1) - t.unsqueeze(2)  # (B, n_link, N, 3)
             x_local = torch.matmul(diff, R)  # (B, n_link, N, 3)
 
-            meshes_torch = torch.tensor(
+            # warp reads torch tensors via __cuda_array_interface__, which does
+            # not support torch.uint64 (raises KeyError: torch.uint64). Build the
+            # (n_batch, n_link) mesh-id array through numpy (which supports
+            # uint64) instead of a torch uint64 tensor.
+            mesh_ids = np.asarray(
                 [self.mesh[link_name]["face_verts"].id for link_name in self.mesh],
-                dtype=torch.uint64,
-                device=self.device,
-            )
-            meshes = wp.array2d(meshes_torch.unsqueeze(0).expand(n_batch, -1), dtype=wp.uint64)
+                dtype=np.uint64,
+            )  # (n_link,)
+            mesh_ids = np.ascontiguousarray(
+                np.broadcast_to(mesh_ids[None], (n_batch, mesh_ids.shape[0]))
+            )  # (n_batch, n_link)
+            meshes = wp.array2d(mesh_ids, dtype=wp.uint64, device=str(self.device))
             dis_local = wp_utils.CalcSdfFieldBatched.apply(meshes, x_local)  # (B, n_link, N) signed
 
             # (-dis_local) is (B, n_links, N) signed distance (interior positive). The link with
